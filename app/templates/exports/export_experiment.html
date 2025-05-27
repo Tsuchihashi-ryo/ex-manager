@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Experiment Export: {{ experiment.title }}</title>
+    <style>
+        body { font-family: sans-serif; margin: 20px; color: #333; }
+        h1, h2, h3 { color: #222; border-bottom: 1px solid #ccc; padding-bottom: 5px; }
+        h1 { font-size: 24px; }
+        h2 { font-size: 20px; margin-top: 30px; }
+        h3 { font-size: 16px; margin-top: 20px; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 12px; }
+        th { background-color: #f2f2f2; font-weight: bold; }
+        .details-table td:first-child { font-weight: bold; width: 25%; }
+        .page-break { page-break-before: always; }
+        .no-data { color: #777; font-style: italic; }
+        .plate-grid {
+            display: grid;
+            /* grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); */ /* Dynamic, might be too wide */
+            gap: 5px;
+            margin-bottom: 15px;
+        }
+        .well {
+            border: 1px solid #ccc;
+            padding: 5px;
+            font-size: 10px;
+            background-color: #f9f9f9;
+        }
+        .well-id { font-weight: bold; margin-bottom: 3px; display: block; }
+        .well-prop { margin-bottom: 2px; }
+        .well-prop-name { font-weight: normal; color: #555; }
+        .well-prop-value { font-weight: bold; }
+
+        /* For standard plates like 96-well */
+        .plate-table-container { overflow-x: auto; } /* Allow horizontal scroll if too wide */
+        .plate-table { border-collapse: collapse; table-layout: fixed; /* Helps with fixed col widths */ }
+        .plate-table th, .plate-table td {
+            border: 1px solid #ccc;
+            padding: 4px;
+            text-align: center;
+            min-width: 70px; /* Adjust as needed for property display */
+            font-size: 9px;
+            word-wrap: break-word; /* Wrap long content */
+        }
+         .plate-table th.row-header {
+            background-color: #f2f2f2;
+            font-weight: bold;
+            min-width: 30px;
+        }
+        .plate-table td .well-prop { font-size: 8px; text-align: left; margin-bottom: 0; }
+        .plate-table td .well-prop-name { font-weight: normal; }
+        .plate-table td .well-prop-value { font-weight: bold; }
+
+
+    </style>
+</head>
+<body>
+    <h1>Experiment Report: {{ experiment.title }}</h1>
+    
+    <h2>Experiment Details</h2>
+    <table class="details-table">
+        <tr><td>Title:</td><td>{{ experiment.title }}</td></tr>
+        <tr><td>Experiment Date:</td><td>{{ experiment.experiment_date.strftime('%Y-%m-%d') if experiment.experiment_date else "N/A" }}</td></tr>
+        <tr><td>Status:</td><td>{{ experiment.status }}</td></tr>
+        <tr><td>Created By:</td><td>{{ experiment.author.username }}</td></tr>
+        <tr><td>Creation Date:</td><td>{{ experiment.creation_date.strftime('%Y-%m-%d %H:%M:%S UTC') }}</td></tr>
+        <tr><td>Last Modified:</td><td>{{ experiment.last_modified_date.strftime('%Y-%m-%d %H:%M:%S UTC') }}</td></tr>
+        <tr><td>Experiment Format:</td><td>{{ experiment.experiment_format_ref.name }}</td></tr>
+    </table>
+
+    <h2>Field Values</h2>
+    {% if experiment.field_values %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Field Name</th>
+                    <th>Value</th>
+                    <th>Units</th>
+                    <th>Required</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for fv in experiment.field_values | sort(attribute='field_definition_ref.id') %}
+                <tr>
+                    <td>{{ fv.field_definition_ref.name }}</td>
+                    <td>
+                        {% if fv.field_definition_ref.field_type == 'FILE' and fv.value %}
+                            {{ fv.value }} (File path)
+                        {% else %}
+                            {{ fv.value if fv.value is not none else '' }}
+                        {% endif %}
+                    </td>
+                    <td>{{ fv.field_definition_ref.units or '' }}</td>
+                    <td>{{ "Yes" if fv.field_definition_ref.is_required else "No" }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p class="no-data">No field values recorded for this experiment.</p>
+    {% endif %}
+
+    {% if experiment.plate_links %}
+        <div class="page-break"></div>
+        <h2>Linked Plates Data</h2>
+        {% for plate_link in experiment.plate_links | sort(attribute='name_in_experiment') %}
+            <h3>Plate: {{ plate_link.name_in_experiment }}</h3>
+            <p><strong>Layout Template:</strong> {{ plate_link.plate_layout.name }} ({{ plate_link.plate_layout.layout_type.replace('_', ' ') | title }})</p>
+            
+            {% set plate_layout = plate_link.plate_layout %}
+            {% set well_data_map = {} %}
+            {% for wd in plate_link.well_data %}
+                {% set _dummy = well_data_map.update({wd.well_identifier: wd.custom_properties if wd.custom_properties else {}}) %}
+            {% endfor %}
+
+            {% if plate_layout.custom_property_definitions|length == 0 %}
+                 <p class="no-data">This plate layout has no custom well properties defined.</p>
+            {% elif not well_data_map %}
+                 <p class="no-data">No well data entered for this plate.</p>
+            {% else %}
+                {% if plate_layout.layout_type != 'CUSTOM_TUBES' and plate_layout.rows and plate_layout.columns %}
+                    <div class="plate-table-container">
+                        <table class="plate-table">
+                            <thead>
+                                <tr>
+                                    <th class="row-header"></th> {# Row header cell #}
+                                    {% for c_idx in range(1, plate_layout.columns + 1) %}
+                                        <th>{{ c_idx }}</th>
+                                    {% endfor %}
+                                </tr>
+                            </thead>
+                            <tbody>
+                            {% for r_idx in range(plate_layout.rows) %}
+                                {% set row_char = (65 + r_idx) | chr %}
+                                <tr>
+                                    <th class="row-header">{{ row_char }}</th>
+                                    {% for c_idx in range(plate_layout.columns) %}
+                                        {% set well_id_str = row_char + (c_idx + 1)|string %}
+                                        {% set current_well_props = well_data_map.get(well_id_str, {}) %}
+                                        <td>
+                                            {% if current_well_props %}
+                                                {% for prop_def in plate_layout.custom_property_definitions | sort(attribute='property_name') %}
+                                                    {% set prop_val = current_well_props.get(prop_def.property_name, '') %}
+                                                    <div class="well-prop" title="{{prop_def.property_name}}: {{prop_val}}">
+                                                        <span class="well-prop-name">{{ prop_def.property_name }}:</span>
+                                                        <span class="well-prop-value">{{ prop_val | truncate(15) }}</span>
+                                                    </div>
+                                                {% endfor %}
+                                            {% else %}
+                                                &nbsp; {# Non-breaking space for empty cells #}
+                                            {% endif %}
+                                        </td>
+                                    {% endfor %}
+                                </tr>
+                            {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% elif plate_layout.layout_type == 'CUSTOM_TUBES' and plate_layout.num_tubes %}
+                    <div class="plate-grid" style="grid-template-columns: repeat({{ plate_layout.custom_property_definitions|length if plate_layout.custom_property_definitions|length <= 4 else 4 }}, minmax(120px, 1fr));">
+                        {% for i in range(1, plate_layout.num_tubes + 1) %}
+                            {% set well_id_str = 'Tube_' + i|string %}
+                            {% set current_well_props = well_data_map.get(well_id_str, {}) %}
+                            <div class="well">
+                                <span class="well-id">{{ well_id_str }}</span>
+                                {% if current_well_props %}
+                                    {% for prop_def in plate_layout.custom_property_definitions | sort(attribute='property_name') %}
+                                     <div class="well-prop">
+                                        <span class="well-prop-name">{{ prop_def.property_name }}:</span>
+                                        <span class="well-prop-value">{{ current_well_props.get(prop_def.property_name, '') }}</span>
+                                     </div>
+                                    {% endfor %}
+                                {% else %}
+                                    <span class="no-data">-- No data --</span>
+                                {% endif %}
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            {% endif %}
+            {% if not loop.last %}<div class="page-break"></div>{% endif %}
+        {% endfor %}
+    {% endif %}
+
+    {% if experiment.change_logs %}
+        <div class="page-break"></div>
+        <h2>Change Log</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Timestamp</th>
+                    <th>User</th>
+                    <th>Field Name</th>
+                    <th>Old Value</th>
+                    <th>New Value</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for log_entry in experiment.change_logs | sort(attribute='timestamp', reverse=True) %}
+                <tr>
+                    <td>{{ log_entry.timestamp.strftime('%Y-%m-%d %H:%M:%S UTC') }}</td>
+                    <td>{{ log_entry.user.username }}</td>
+                    <td>{{ log_entry.field_name }}</td>
+                    <td>{{ log_entry.old_value if log_entry.old_value is not none else '' }}</td>
+                    <td>{{ log_entry.new_value if log_entry.new_value is not none else '' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% endif %}
+
+</body>
+</html>

@@ -1,0 +1,72 @@
+{% extends "layout.html" %}
+{% block content %}
+    <div class="content-section">
+        <form method="POST" action="">
+            {{ form.hidden_tag() }}
+            <fieldset class="form-group">
+                <legend class="border-bottom mb-4">Create New Pattern for: {{ format.name }}</legend>
+                <div class="form-group">
+                    {{ form.name.label(class="form-control-label") }}
+                    {% if form.name.errors %}
+                        {{ form.name(class="form-control form-control-lg is-invalid") }}
+                        <div class="invalid-feedback">
+                            {% for error in form.name.errors %}
+                                <span>{{ error }}</span>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        {{ form.name(class="form-control form-control-lg") }}
+                    {% endif %}
+                </div>
+                <div class="form-group">
+                    {{ form.description.label(class="form-control-label") }}
+                    {% if form.description.errors %}
+                        {{ form.description(class="form-control form-control-lg is-invalid") }}
+                        <div class="invalid-feedback">
+                            {% for error in form.description.errors %}
+                                <span>{{ error }}</span>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        {{ form.description(class="form-control form-control-lg") }}
+                    {% endif %}
+                </div>
+                <div class="form-group">
+                    {{ form.pattern_data_json.label(class="form-control-label") }}
+                    <p class="text-muted">Enter the pattern data in JSON format. The keys should correspond to the field names defined in the '{{format.name}}' format.</p>
+                    {% if form.pattern_data_json.errors %}
+                        {{ form.pattern_data_json(class="form-control form-control-lg is-invalid", rows=10) }}
+                        <div class="invalid-feedback">
+                            {% for error in form.pattern_data_json.errors %}
+                                <span>{{ error }}</span>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        {{ form.pattern_data_json(class="form-control form-control-lg", rows=10) }}
+                    {% endif %}
+                    <h5 class="mt-3">Fields in '{{format.name}}' format:</h5>
+                    {% if format.fields %}
+                    <ul>
+                        {% for field in format.fields %}
+                            <li>
+                                <strong>{{ field.name }}</strong> (Type: {{ field.field_type }}
+                                {% if field.units %}, Units: {{ field.units }}{% endif %}
+                                {% if field.is_required %}, Required{% endif %})
+                                {% if field.field_type == 'DROPDOWN' and field.dropdown_options %}
+                                    <br><small>Options: {{ field.dropdown_options }}</small>
+                                {% endif %}
+                            </li>
+                        {% endfor %}
+                    </ul>
+                    {% else %}
+                    <p>No fields defined for this format yet. This pattern cannot be effectively used.</p>
+                    {% endif %}
+                </div>
+            </fieldset>
+            <div class="form-group">
+                {{ form.submit(class="btn btn-outline-info") }}
+                 <a href="{{ url_for('view_experiment_format', format_id=format.id) }}" class="btn btn-outline-secondary">Cancel</a>
+            </div>
+        </form>
+    </div>
+{% endblock content %}

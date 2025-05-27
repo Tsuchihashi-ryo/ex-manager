@@ -1,0 +1,109 @@
+{% extends "layout.html" %}
+{% block content %}
+<div class="content-section">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2>{{ layout.name }}</h2>
+        <div>
+            {% if layout.user_id == current_user.id %}
+                <a href="{{ url_for('edit_plate_layout', layout_id=layout.id) }}" class="btn btn-outline-secondary btn-sm">Edit Layout</a>
+                <form action="{{ url_for('delete_plate_layout', layout_id=layout.id) }}" method="POST" style="display:inline;">
+                    <input type="submit" value="Delete Layout" class="btn btn-outline-danger btn-sm" onclick="return confirm('Are you sure you want to delete this layout template?');">
+                </form>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-header">Layout Details</div>
+        <div class="card-body">
+            <p><strong>Description:</strong> {{ layout.description if layout.description else 'N/A' }}</p>
+            <p><strong>Layout Type:</strong> {{ layout.layout_type.replace('_', ' ') | title }}</p>
+            {% if layout.layout_type != 'CUSTOM_TUBES' %}
+                <p><strong>Dimensions:</strong> {{ layout.rows }} rows &times; {{ layout.columns }} columns</p>
+            {% else %}
+                <p><strong>Number of Tubes/Wells:</strong> {{ layout.num_tubes }}</p>
+            {% endif %}
+            <p><strong>Created by:</strong> {{ layout.creator.username }}</p>
+        </div>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-header">Custom Well Properties Defined</div>
+        {% if layout.custom_property_definitions %}
+            <ul class="list-group list-group-flush">
+                {% for prop in layout.custom_property_definitions | sort(attribute='property_name') %}
+                    <li class="list-group-item">
+                        <strong>{{ prop.property_name }}</strong> (Type: {{ prop.property_type }})
+                    </li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <div class="card-body">
+                <p>No custom well properties defined for this layout.</p>
+            </div>
+        {% endif %}
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-header">Basic Graphical Representation</div>
+        <div class="card-body">
+            {% if layout.layout_type != 'CUSTOM_TUBES' and layout.rows and layout.columns %}
+                <p><strong>{{ layout.rows }}x{{ layout.columns }} Plate:</strong></p>
+                <div class="table-responsive" style="max-width: 600px;">
+                    <table class="table table-bordered text-center table-sm" style="width: auto; font-size: 0.8em;">
+                        <thead>
+                            <tr>
+                                <th></th> {# Empty for row headers #}
+                                {% for col_num in range(1, layout.columns + 1) %}
+                                    <th>{{ col_num }}</th>
+                                {% endfor %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for r_idx in range(layout.rows) %}
+                                {% set row_char = (65 + r_idx) | chr %} {# A, B, C... #}
+                                <tr>
+                                    <th>{{ row_char }}</th>
+                                    {% for c_idx in range(layout.columns) %}
+                                        <td>{{ row_char }}{{ c_idx + 1 }}</td>
+                                    {% endfor %}
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% elif layout.layout_type == 'CUSTOM_TUBES' and layout.num_tubes %}
+                 <p><strong>{{ layout.num_tubes }} Tubes/Wells:</strong></p>
+                 <div class="d-flex flex-wrap">
+                    {% for i in range(1, layout.num_tubes + 1) %}
+                        <div class="border p-2 m-1 text-center" style="min-width: 80px;">Tube {{ i }}</div>
+                    {% endfor %}
+                 </div>
+            {% else %}
+                <p>Layout dimensions not fully specified for graphical representation.</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-header">Experiments Using This Layout ({{ layout.experiment_links|length }})</div>
+        {% if layout.experiment_links %}
+            <ul class="list-group list-group-flush">
+                {% for link in layout.experiment_links | sort(attribute='experiment_instance.title') %}
+                    <li class="list-group-item">
+                        <a href="{{ url_for('view_experiment_instance', instance_id=link.experiment_instance.id) }}">{{ link.experiment_instance.title }}</a>
+                        (as "{{ link.name_in_experiment }}")
+                        <span class="text-muted float-right">By: {{ link.experiment_instance.author.username }}</span>
+                    </li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <div class="card-body">
+                <p>This plate layout is not currently linked to any experiments.</p>
+            </div>
+        {% endif %}
+    </div>
+    
+    <a href="{{ url_for('list_plate_layouts') }}" class="btn btn-secondary">Back to All Layouts</a>
+</div>
+{% endblock content %}

@@ -1,0 +1,10 @@
+{% extends "layout.html" %}
+{% block content %}
+    <h1>Home Page Content</h1>
+    <p>This is the home page of our Flask Blog.</p>
+    {% if current_user.is_authenticated %}
+        <p>Welcome back, {{ current_user.username }}!</p>
+    {% else %}
+        <p>Please <a href="{{ url_for('login') }}">log in</a> or <a href="{{ url_for('register') }}">register</a> to get started.</p>
+    {% endif %}
+{% endblock content %}

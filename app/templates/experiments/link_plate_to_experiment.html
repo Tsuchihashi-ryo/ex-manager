@@ -1,0 +1,46 @@
+{% extends "layout.html" %}
+{% block content %}
+    <div class="content-section">
+        <form method="POST" action="">
+            {{ form.hidden_tag() }}
+            <fieldset class="form-group">
+                <legend class="border-bottom mb-4">{{ title }} for: {{ experiment.title }}</legend>
+                <div class="form-group">
+                    {{ form.plate_layout.label(class="form-control-label") }}
+                    {% if form.plate_layout.errors %}
+                        {{ form.plate_layout(class="form-control form-control-lg is-invalid") }}
+                        <div class="invalid-feedback">
+                            {% for error in form.plate_layout.errors %}
+                                <span>{{ error }}</span>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        {{ form.plate_layout(class="form-control form-control-lg") }}
+                    {% endif %}
+                    <small class="form-text text-muted">
+                        Only layouts you have created are shown. 
+                        <a href="{{ url_for('create_plate_layout', next=request.url) }}" target="_blank">Create a new layout template?</a> (Opens in new tab)
+                    </small>
+                </div>
+                <div class="form-group">
+                    {{ form.name_in_experiment.label(class="form-control-label") }}
+                    {% if form.name_in_experiment.errors %}
+                        {{ form.name_in_experiment(class="form-control form-control-lg is-invalid") }}
+                        <div class="invalid-feedback">
+                            {% for error in form.name_in_experiment.errors %}
+                                <span>{{ error }}</span>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        {{ form.name_in_experiment(class="form-control form-control-lg") }}
+                    {% endif %}
+                    <small class="form-text text-muted">This name must be unique within this experiment (e.g., "Input Plate 1", "Reagent Tubes A").</small>
+                </div>
+            </fieldset>
+            <div class="form-group">
+                {{ form.submit(class="btn btn-outline-info") }}
+                <a href="{{ url_for('edit_experiment_instance', instance_id=experiment.id) }}" class="btn btn-outline-secondary">Cancel</a>
+            </div>
+        </form>
+    </div>
+{% endblock content %}

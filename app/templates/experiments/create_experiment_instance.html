@@ -1,0 +1,120 @@
+{% extends "layout.html" %}
+{% block content %}
+    <div class="content-section">
+        <form method="POST" action="">
+            {{ form.hidden_tag() }}
+            <fieldset class="form-group">
+                <legend class="border-bottom mb-4">{{ title }}</legend>
+                <div class="form-group">
+                    {{ form.title.label(class="form-control-label") }}
+                    {% if form.title.errors %}
+                        {{ form.title(class="form-control form-control-lg is-invalid") }}
+                        <div class="invalid-feedback">
+                            {% for error in form.title.errors %}
+                                <span>{{ error }}</span>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        {{ form.title(class="form-control form-control-lg") }}
+                    {% endif %}
+                </div>
+                <div class="form-group">
+                    {{ form.experiment_date.label(class="form-control-label") }}
+                    {% if form.experiment_date.errors %}
+                        {{ form.experiment_date(class="form-control form-control-lg is-invalid") }}
+                        <div class="invalid-feedback">
+                            {% for error in form.experiment_date.errors %}
+                                <span>{{ error }}</span>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        {{ form.experiment_date(class="form-control form-control-lg") }}
+                    {% endif %}
+                </div>
+                <div class="form-group">
+                    {{ form.experiment_format.label(class="form-control-label") }}
+                     {% if form.experiment_format.errors %}
+                        {{ form.experiment_format(class="form-control form-control-lg is-invalid") }}
+                        <div class="invalid-feedback">
+                            {% for error in form.experiment_format.errors %}
+                                <span>{{ error }}</span>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                         {{ form.experiment_format(class="form-control form-control-lg") }}
+                    {% endif %}
+                   
+                </div>
+                 <div class="form-group">
+                    {{ form.status.label(class="form-control-label") }}
+                    {% if form.status.errors %}
+                        {{ form.status(class="form-control form-control-lg is-invalid") }}
+                        <div class="invalid-feedback">
+                            {% for error in form.status.errors %}
+                                <span>{{ error }}</span>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        {{ form.status(class="form-control form-control-lg") }}
+                    {% endif %}
+                </div>
+                {# Placeholder for pattern selection - might be added via JavaScript #}
+                {# 
+                <div class="form-group" id="pattern-selection-div" style="display: none;">
+                    <label class="form-control-label" for="pattern">Apply Pattern (Optional)</label>
+                    <select name="pattern" id="pattern" class="form-control form-control-lg">
+                        <option value="">-- No Pattern --</option>
+                    </select>
+                </div>
+                #}
+            </fieldset>
+            <div class="form-group">
+                {{ form.submit(class="btn btn-outline-info") }}
+            </div>
+        </form>
+    </div>
+
+{# Basic JavaScript to load patterns when a format is selected - can be expanded #}
+{#
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        var formatSelect = document.getElementById('{{ form.experiment_format.id }}');
+        var patternSelect = document.getElementById('pattern');
+        var patternDiv = document.getElementById('pattern-selection-div');
+
+        if (formatSelect) {
+            formatSelect.addEventListener('change', function() {
+                var formatId = this.value;
+                if (formatId) {
+                    fetch("{{ url_for('get_patterns', format_id=0) }}".slice(0, -1) + formatId)
+                        .then(response => response.json())
+                        .then(data => {
+                            patternSelect.innerHTML = '<option value="">-- No Pattern --</option>'; // Reset
+                            if (data.patterns && data.patterns.length > 0) {
+                                data.patterns.forEach(function(pattern) {
+                                    var option = new Option(pattern.name, pattern.id);
+                                    patternSelect.add(option);
+                                });
+                                patternDiv.style.display = 'block';
+                            } else {
+                                patternDiv.style.display = 'none';
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Error fetching patterns:', error);
+                            patternDiv.style.display = 'none';
+                        });
+                } else {
+                    patternDiv.style.display = 'none';
+                    patternSelect.innerHTML = '<option value="">-- No Pattern --</option>';
+                }
+            });
+            // Trigger change on load if a format is already selected (e.g. validation error)
+            if (formatSelect.value) {
+                formatSelect.dispatchEvent(new Event('change'));
+            }
+        }
+    });
+</script>
+#}
+{% endblock content %}

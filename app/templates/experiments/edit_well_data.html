@@ -1,0 +1,125 @@
+{% extends "layout.html" %}
+{% block content %}
+<div class="content-section">
+    <form method="POST" action="">
+        {{ form.hidden_tag() }}
+        <fieldset class="form-group">
+            <legend class="border-bottom mb-4">{{ title }} for Experiment: {{ experiment.title }}</legend>
+            <p>Layout: <strong>{{ plate_layout.name }}</strong> ({{ plate_layout.layout_type.replace('_', ' ') | title }})</p>
+            
+            {% if plate_layout.custom_property_definitions|length == 0 %}
+                <div class="alert alert-warning">
+                    This plate layout has no custom well properties defined. 
+                    <a href="{{ url_for('edit_plate_layout', layout_id=plate_layout.id) }}" class="alert-link" target="_blank">
+                        Add properties to the layout template
+                    </a> 
+                    to enter data. (You might need to refresh this page after adding properties).
+                </div>
+            {% else %}
+                <p>Enter data for each well/tube below. All fields are optional unless specified by the layout.</p>
+            {% endif %}
+
+            <hr>
+
+            {% if plate_layout.layout_type != 'CUSTOM_TUBES' and plate_layout.rows and plate_layout.columns %}
+                {# Grid layout for plates #}
+                <div class="table-responsive">
+                    <table class="table table-bordered table-sm" style="font-size: 0.9em;">
+                        <thead class="thead-light">
+                            <tr>
+                                <th style="min-width: 50px;"></th> {# Row header cell #}
+                                {% for c_idx in range(1, plate_layout.columns + 1) %}
+                                    <th class="text-center" style="min-width: 150px;">{{ c_idx }}</th>
+                                {% endfor %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                        {% for r_idx in range(plate_layout.rows) %}
+                            {% set row_char = (65 + r_idx) | chr %}
+                            <tr>
+                                <th class="text-center table-light">{{ row_char }}</th>
+                                {% for c_idx in range(plate_layout.columns) %}
+                                    {% set well_id_str = row_char + (c_idx + 1)|string %}
+                                    <td>
+                                        <div class="font-weight-bold mb-1">{{ well_id_str }}</div>
+                                        {% for prop_def in plate_layout.custom_property_definitions %}
+                                            {% set field_name = 'well_' + well_id_str + '_prop_' + prop_def.id|string %}
+                                            {% set field = form[field_name] %}
+                                            {% if field %}
+                                                <div class="form-group mb-1">
+                                                    {{ field.label(text=prop_def.property_name, class="small mb-0") }}
+                                                    {% if field.type == 'BooleanField' %}
+                                                        {{ field(class="form-check-input ml-1") }}
+                                                    {% elif field.type == 'StringField' and prop_def.property_type == 'NUMBER' %}
+                                                         {{ field(class="form-control form-control-sm", type="number", step="any") }}
+                                                    {% else %}
+                                                         {{ field(class="form-control form-control-sm") }}
+                                                    {% endif %}
+                                                    {% if field.errors %}
+                                                        <div class="invalid-feedback d-block">
+                                                            {% for error in field.errors %}<span>{{ error }}</span>{% endfor %}
+                                                        </div>
+                                                    {% endif %}
+                                                </div>
+                                            {% endif %}
+                                        {% endfor %}
+                                    </td>
+                                {% endfor %}
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% elif plate_layout.layout_type == 'CUSTOM_TUBES' and plate_layout.num_tubes %}
+                {# List layout for custom tubes #}
+                <div class="list-group">
+                {% for i in range(1, plate_layout.num_tubes + 1) %}
+                    {% set well_id_str = 'Tube_' + i|string %}
+                    <div class="list-group-item mb-3">
+                        <h6 class="mb-3"><strong>{{ well_id_str }}</strong></h6>
+                        {% for prop_def in plate_layout.custom_property_definitions %}
+                            {% set field_name = 'well_' + well_id_str + '_prop_' + prop_def.id|string %}
+                            {% set field = form[field_name] %}
+                            {% if field %}
+                            <div class="form-group row">
+                                {{ field.label(text=prop_def.property_name, class="col-sm-4 col-form-label col-form-label-sm text-right") }}
+                                <div class="col-sm-8">
+                                {% if field.type == 'BooleanField' %}
+                                    <div class="form-check mt-1">
+                                    {{ field(class="form-check-input") }}
+                                    </div>
+                                {% elif field.type == 'StringField' and prop_def.property_type == 'NUMBER' %}
+                                    {{ field(class="form-control form-control-sm", type="number", step="any") }}
+                                {% else %}
+                                    {{ field(class="form-control form-control-sm") }}
+                                {% endif %}
+                                {% if field.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {% for error in field.errors %}<span>{{ error }}</span>{% endfor %}
+                                    </div>
+                                {% endif %}
+                                </div>
+                            </div>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                {% endfor %}
+                </div>
+            {% else %}
+                <p>This plate layout is not correctly defined for data entry (no dimensions or tube count).</p>
+            {% endif %}
+        </fieldset>
+        
+        {% if plate_layout.custom_property_definitions|length > 0 %}
+        <div class="form-group mt-4">
+            {{ form.submit(class="btn btn-primary") }}
+            <a href="{{ url_for('view_experiment_instance', instance_id=experiment.id) }}" class="btn btn-secondary">Back to Experiment View</a>
+        </div>
+        {% else %}
+         <div class="form-group mt-4">
+            <a href="{{ url_for('view_experiment_instance', instance_id=experiment.id) }}" class="btn btn-secondary">Back to Experiment View</a>
+        </div>
+        {% endif %}
+    </form>
+</div>
+{% endblock content %}

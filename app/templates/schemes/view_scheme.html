@@ -1,0 +1,168 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<div class="content-section">
+    <div class="d-flex justify-content-between align-items-center">
+        <h2>{{ title }}</h2>
+        <div>
+            {% if scheme.user_id == current_user.id %}
+            <a href="{{ url_for('edit_scheme', scheme_id=scheme.id) }}" class="btn btn-outline-secondary btn-sm">Edit Scheme</a>
+            {% endif %}
+            <a href="{{ url_for('list_schemes') }}" class="btn btn-secondary btn-sm">Back to Schemes List</a>
+        </div>
+    </div>
+    <p>{{ scheme.description if scheme.description else "No description provided."}}</p>
+    <hr>
+
+    <div id="schemeViewCanvas" style="width: 100%; height: 600px; border: 1px solid #eee; position: relative; overflow: auto; background-color: #f9f9f9;">
+        {# Nodes and Edges will be rendered here by JavaScript #}
+    </div>
+</div>
+{% endblock content %}
+
+{% block scripts %}
+{{ super() }}
+{# Using a CDN for LeaderLine. If you download it locally, adjust the path. #}
+<script src="https://cdn.jsdelivr.net/npm/leader-line-new@1.1.9/leader-line.min.js"></script>
+
+<style>
+    .scheme-node-view {
+        position: absolute;
+        border: 1px solid #666;
+        padding: 10px;
+        text-align: center;
+        background-color: #fff; /* Default, will be overridden by node.color */
+        border-radius: 5px;
+        box-shadow: 1px 1px 3px rgba(0,0,0,0.1);
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        overflow: hidden;
+    }
+    .node-label-view {
+        font-weight: bold;
+        font-size: 0.9em;
+        margin-bottom: 5px;
+        word-break: break-word;
+    }
+    .node-subtext-view {
+        font-size: 0.75em;
+        color: #555;
+        word-break: break-word;
+    }
+</style>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const schemeCanvas = document.getElementById('schemeViewCanvas');
+        const nodes = JSON.parse('{{ nodes_json | safe }}');
+        const edges = JSON.parse('{{ edges_json | safe }}');
+        let leaderLines = [];
+
+        function renderNodes() {
+            schemeCanvas.innerHTML = ''; // Clear existing nodes
+            nodes.forEach(node => {
+                const nodeEl = document.createElement('div');
+                nodeEl.classList.add('scheme-node-view');
+                // Note: In a view-only, data-id might not be strictly necessary unless for debugging
+                nodeEl.setAttribute('data-id', node.id); 
+                nodeEl.style.left = node.pos_x + 'px';
+                nodeEl.style.top = node.pos_y + 'px';
+                nodeEl.style.width = (node.width || 150) + 'px';
+                nodeEl.style.height = (node.height || 100) + 'px';
+                nodeEl.style.backgroundColor = node.color || '#FFFFFF';
+
+                const labelEl = document.createElement('div');
+                labelEl.classList.add('node-label-view');
+                labelEl.textContent = node.label;
+                nodeEl.appendChild(labelEl);
+                
+                if (node.description) {
+                     const descriptionEl = document.createElement('div');
+                     descriptionEl.classList.add('node-subtext-view');
+                     descriptionEl.textContent = node.description.substring(0,50) + (node.description.length > 50 ? '...' : ''); // Show truncated description
+                     descriptionEl.title = node.description; // Full description on hover
+                     nodeEl.appendChild(descriptionEl);
+                }
+
+
+                if (node.linked_experiment_instance_id) {
+                    const instanceLinkEl = document.createElement('div');
+                    instanceLinkEl.classList.add('node-subtext-view');
+                    let linkText = `Exp: ${node.linked_experiment_instance_name || node.linked_experiment_instance_id}`;
+                    const instanceViewUrl = "{{ url_for('view_experiment_instance', instance_id=0) }}".slice(0, -1) + node.linked_experiment_instance_id;
+                    instanceLinkEl.innerHTML = `<a href="${instanceViewUrl}" target="_blank" title="View Experiment Instance">${linkText}</a>`;
+                    nodeEl.appendChild(instanceLinkEl);
+                }
+                if (node.linked_experiment_format_id) {
+                     const formatLinkEl = document.createElement('div');
+                     formatLinkEl.classList.add('node-subtext-view');
+                     let formatText = `Format: ${node.linked_experiment_format_name || node.linked_experiment_format_id}`;
+                     const formatViewUrl = "{{ url_for('view_experiment_format', format_id=0) }}".slice(0, -1) + node.linked_experiment_format_id;
+                     formatLinkEl.innerHTML = `<a href="${formatViewUrl}" target="_blank" title="View Experiment Format">${formatText}</a>`;
+                     nodeEl.appendChild(formatLinkEl);
+                }
+                
+                schemeCanvas.appendChild(nodeEl);
+            });
+        }
+
+        function renderEdges() {
+            leaderLines.forEach(line => line.remove());
+            leaderLines = [];
+
+            edges.forEach(edge => {
+                const sourceNodeEl = document.querySelector(`.scheme-node-view[data-id='${edge.source_node_id}']`);
+                const targetNodeEl = document.querySelector(`.scheme-node-view[data-id='${edge.target_node_id}']`);
+                if (sourceNodeEl && targetNodeEl) {
+                    try {
+                        const line = new LeaderLine(
+                            sourceNodeEl,
+                            targetNodeEl,
+                            { 
+                                color: 'rgba(0,0,0,0.6)', 
+                                size: 2, 
+                                path: 'fluid',
+                                endPlug: 'arrow1',
+                                // For labels on edges in view mode (if edge.label exists)
+                                // middleLabel: LeaderLine.pathLabel(edge.label || '', {color: 'black', offset: [0, -5]})
+                            }
+                        );
+                         if (edge.label) { // A simple way to add label overlay if LeaderLine doesn't handle it well directly or complexly
+                            const labelOverlay = document.createElement('div');
+                            labelOverlay.textContent = edge.label;
+                            labelOverlay.style.position = 'absolute';
+                            // Basic positioning - this would need a robust library or calculations for proper placement
+                            labelOverlay.style.left = ((sourceNodeEl.offsetLeft + targetNodeEl.offsetLeft) / 2) + 'px';
+                            labelOverlay.style.top = ((sourceNodeEl.offsetTop + targetNodeEl.offsetTop) / 2) -10 + 'px';
+                            labelOverlay.style.fontSize = '0.8em';
+                            labelOverlay.style.color = 'dimGray';
+                            labelOverlay.style.padding = '2px';
+                            labelOverlay.style.backgroundColor = 'rgba(255,255,255,0.7)';
+                            schemeCanvas.appendChild(labelOverlay); // Add to canvas, not directly to line
+                        }
+                        leaderLines.push(line);
+                    } catch (e) {
+                        console.error("Error creating LeaderLine for view:", e);
+                    }
+                }
+            });
+        }
+
+        function renderAll() {
+            renderNodes();
+            renderEdges();
+        }
+
+        // Ensure canvas is fully loaded, especially if using images or complex styles later
+        // For this basic version, direct call is fine.
+        renderAll();
+        
+        // Optional: Reposition lines if window is resized
+        // window.addEventListener('resize', function() {
+        //    leaderLines.forEach(line => line.position());
+        // });
+    });
+</script>
+{% endblock scripts %}

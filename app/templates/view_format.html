@@ -1,0 +1,86 @@
+{% extends "layout.html" %}
+{% block content %}
+    <div class="content-section">
+        <div class="d-flex justify-content-between align-items-center">
+            <h2>{{ format.name }}</h2>
+            <div>
+                <a href="{{ url_for('edit_experiment_format', format_id=format.id) }}" class="btn btn-outline-secondary btn-sm">Edit Format</a>
+                <a href="{{ url_for('create_format_pattern', format_id=format.id) }}" class="btn btn-outline-info btn-sm">Create Pattern</a>
+            </div>
+        </div>
+        <p class="text-muted">{{ format.description if format.description else 'No description provided.' }}</p>
+        
+        <hr>
+        <h4>Fields</h4>
+        {% if format.fields %}
+            <ul class="list-group mb-3">
+                {% for field in format.fields | sort(attribute='id') %}
+                    <li class="list-group-item">
+                        <strong>{{ field.name }}</strong> ({{ field.field_type }})
+                        {% if field.units %}- {{ field.units }}{% endif %}
+                        {% if field.is_required %}<span class="badge badge-danger ml-2">Required</span>{% endif %}
+                        {% if field.field_type == 'DROPDOWN' and field.dropdown_options %}
+                            <br><small class="text-muted">Options: {{ field.dropdown_options }}</small>
+                        {% endif %}
+                    </li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p>This format has no fields defined yet. <a href="{{ url_for('edit_experiment_format', format_id=format.id) }}">Add fields now</a>.</p>
+        {% endif %}
+
+        <hr>
+        <h4>Patterns Defined for this Format</h4>
+        {% if format.patterns %}
+            <ul class="list-group mb-3">
+                {% for pattern in format.patterns | sort(attribute='name') %}
+                    <li class="list-group-item">
+                        <strong>{{ pattern.name }}</strong>
+                        <p>{{ pattern.description if pattern.description else 'No description.' }}</p>
+                        {% if pattern.pattern_data %}
+                        <code><pre>{{ pattern.pattern_data | tojson(indent=2) }}</pre></code>
+                        {% endif %}
+                    </li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p>No patterns defined for this format yet. <a href="{{ url_for('create_format_pattern', format_id=format.id) }}">Create one</a>.</p>
+        {% endif %}
+
+        <hr>
+        <h4>Experiments Using This Format ({{ format.instances|length }})</h4>
+        {% if format.instances %}
+            <ul class="list-group mb-3">
+                {% for instance in format.instances | sort(attribute='title') %}
+                    <li class="list-group-item">
+                        <a href="{{ url_for('view_experiment_instance', instance_id=instance.id) }}">{{ instance.title }}</a> 
+                        (Status: {{ instance.status }}, By: {{ instance.author.username }})
+                    </li>
+                {% else %} 
+                    {# This 'else' for the loop is unusual here, typically it's for empty list after loop #}
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p>No experiments are currently using this format.</p>
+        {% endif %}
+
+        <hr>
+        <h4>Schemes Referencing This Format ({{ format.scheme_nodes|length }})</h4>
+         {% if format.scheme_nodes %}
+            <ul class="list-group mb-3">
+                {% for node in format.scheme_nodes | sort(attribute='scheme.name') %}
+                    <li class="list-group-item">
+                        Scheme: <a href="{{ url_for('view_scheme', scheme_id=node.scheme.id) }}">{{ node.scheme.name }}</a>
+                        (Node: "{{ node.label }}")
+                    </li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p>No experiment schemes are currently referencing this format in their nodes.</p>
+        {% endif %}
+
+        <div class="mt-3">
+             <a href="{{ url_for('list_experiment_formats') }}" class="btn btn-secondary">Back to All Formats</a>
+        </div>
+    </div>
+{% endblock content %}

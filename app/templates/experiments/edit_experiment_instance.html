@@ -1,0 +1,202 @@
+{% extends "layout.html" %}
+{% block content %}
+    <div class="content-section">
+        <h2>{{ title }}</h2>
+        <p>Format: <strong>{{ format.name }}</strong> | Created by: {{ instance.author.username }} on {{ instance.creation_date.strftime('%Y-%m-%d') }}</p>
+        <hr>
+
+        {# Form for Main Experiment Details (Title, Date, Status) #}
+        <form method="POST" action="{{ url_for('edit_experiment_instance', instance_id=instance.id) }}">
+            {{ main_details_form.hidden_tag() }}
+            <fieldset class="form-group">
+                <legend class="border-bottom mb-4">Experiment Details</legend>
+                <div class="form-group">
+                    {{ main_details_form.title.label(class="form-control-label") }}
+                    {% if main_details_form.title.errors %}
+                        {{ main_details_form.title(class="form-control form-control-lg is-invalid") }}
+                        <div class="invalid-feedback">
+                            {% for error in main_details_form.title.errors %}<span>{{ error }}</span>{% endfor %}
+                        </div>
+                    {% else %}
+                        {{ main_details_form.title(class="form-control form-control-lg") }}
+                    {% endif %}
+                </div>
+                <div class="form-row">
+                    <div class="form-group col-md-6">
+                        {{ main_details_form.experiment_date.label(class="form-control-label") }}
+                        {% if main_details_form.experiment_date.errors %}
+                            {{ main_details_form.experiment_date(class="form-control form-control-lg is-invalid") }}
+                            <div class="invalid-feedback">
+                                {% for error in main_details_form.experiment_date.errors %}<span>{{ error }}</span>{% endfor %}
+                            </div>
+                        {% else %}
+                            {{ main_details_form.experiment_date(class="form-control form-control-lg") }}
+                        {% endif %}
+                    </div>
+                    <div class="form-group col-md-6">
+                        {{ main_details_form.status.label(class="form-control-label") }}
+                        {% if main_details_form.status.errors %}
+                            {{ main_details_form.status(class="form-control form-control-lg is-invalid") }}
+                            <div class="invalid-feedback">
+                                {% for error in main_details_form.status.errors %}<span>{{ error }}</span>{% endfor %}
+                            </div>
+                        {% else %}
+                            {{ main_details_form.status(class="form-control form-control-lg") }}
+                        {% endif %}
+                    </div>
+                </div>
+                 <div class="form-group">
+                    {# Experiment Format is not editable here, display as info #}
+                    <label class="form-control-label">Experiment Format</label>
+                    <input type="text" readonly class="form-control-plaintext form-control-lg" value="{{ instance.experiment_format_ref.name }}">
+                </div>
+            </fieldset>
+            <div class="form-group">
+                <input type="submit" name="submit_details" class="btn btn-info" value="Update Details">
+            </div>
+        </form>
+        <hr>
+
+        {# Form for Dynamic Experiment Data Fields #}
+        <form method="POST" action="{{ url_for('edit_experiment_instance', instance_id=instance.id) }}" enctype="multipart/form-data">
+            {{ dynamic_data_form.hidden_tag() }} {# If CSRF is enabled for dynamic form separately #}
+            <fieldset class="form-group">
+                <legend class="border-bottom mb-4">Experiment Data Fields</legend>
+
+                {% if dynamic_data_form.pattern_to_apply %}
+                <div class="form-group row">
+                    <div class="col-md-6">
+                        {{ dynamic_data_form.pattern_to_apply.label(class="form-control-label") }}
+                        {{ dynamic_data_form.pattern_to_apply(class="form-control form-control-sm", id="pattern_select") }}
+                        <small class="form-text text-muted">Selecting a pattern will pre-fill fields. Save to apply.</small>
+                         {% if dynamic_data_form.pattern_to_apply.errors %}
+                            <div class="invalid-feedback d-block">
+                                {% for error in dynamic_data_form.pattern_to_apply.errors %}<span>{{ error }}</span>{% endfor %}
+                            </div>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-6 align-self-end">
+                         <button type="button" id="apply-pattern-btn" class="btn btn-sm btn-outline-secondary">Load Pattern Data</button>
+                    </div>
+                </div>
+                <hr>
+                {% endif %}
+                
+                {% for field_def in format.fields %}
+                    {% set form_field = dynamic_data_form['field_' + field_def.id|string] %}
+                    <div class="form-group">
+                        {{ form_field.label(class="form-control-label") }}
+                        {% if field_def.is_required %}<span class="text-danger">*</span>{% endif %}
+                        
+                        {% if form_field.errors %}
+                            {{ form_field(class="form-control form-control-lg is-invalid") }}
+                            <div class="invalid-feedback">
+                                {% for error in form_field.errors %}<span>{{ error }}</span>{% endfor %}
+                            </div>
+                        {% else %}
+                             {% if field_def.field_type == 'TEXTAREA' %} {# Assuming you add TEXTAREA type #}
+                                {{ form_field(class="form-control form-control-lg", rows="3") }}
+                            {% elif field_def.field_type == 'FILE' %}
+                                {% set current_file_value = dynamic_data_form['field_' + field_def.id|string].data %}
+                                {{ form_field(class="form-control-file form-control-lg") }}
+                                {% if current_file_value and isinstance(current_file_value, str) %}
+                                    <small class="form-text text-muted">Current file: 
+                                        <a href="{{ url_for('static', filename='uploads/' + current_file_value) }}" target="_blank">{{ current_file_value.split('/')[-1] }}</a>
+                                    </small>
+                                 {% endif %}
+                            {% else %}
+                                {{ form_field(class="form-control form-control-lg") }}
+                            {% endif %}
+                        {% endif %}
+                        {% if field_def.field_type == 'DROPDOWN' and field_def.dropdown_options %}
+                             <small class="form-text text-muted">Options: {{ field_def.dropdown_options }}</small>
+                        {% endif %}
+                    </div>
+                {% endfor %}
+            </fieldset>
+            <div class="form-group">
+                 <input type="submit" name="submit_data" class="btn btn-primary" value="Save Data Fields">
+            </div>
+        </form>
+        <hr>
+        <a href="{{ url_for('view_experiment_instance', instance_id=instance.id) }}" class="btn btn-secondary">View Experiment</a>
+        <a href="{{ url_for('list_experiments') }}" class="btn btn-light">Back to All Experiments</a>
+    </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const patternSelect = document.getElementById('pattern_select');
+    const applyPatternBtn = document.getElementById('apply-pattern-btn');
+    const formatId = {{ format.id }};
+
+    if (applyPatternBtn && patternSelect) {
+        applyPatternBtn.addEventListener('click', function() {
+            const patternId = patternSelect.value;
+            if (!patternId) {
+                alert('Please select a pattern to apply.');
+                return;
+            }
+
+            // Fetch pattern data from server
+            // This assumes your get_patterns route also returns pattern_data
+            // Or you might need a new route: /experiments/get_pattern_data/<int:pattern_id>
+            fetch(`{{ url_for('get_patterns', format_id=formatId) }}`) 
+                .then(response => response.json())
+                .then(data => {
+                    const selectedPattern = data.patterns.find(p => p.id == patternId);
+                    if (selectedPattern && selectedPattern.data) {
+                        console.log("Applying pattern data:", selectedPattern.data);
+                        for (const fieldNameKey in selectedPattern.data) {
+                            // fieldNameKey is the actual field name (e.g., "Temperature")
+                            // We need to find the FieldDefinition.id for this name
+                            let fieldDefId = null;
+                            {% for fd in format.fields %}
+                                if ("{{ fd.name }}" === fieldNameKey) {
+                                    fieldDefId = "{{ fd.id }}";
+                                }
+                            {% endfor %}
+
+                            if (fieldDefId) {
+                                const formFieldName = `field_${fieldDefId}`;
+                                const formField = document.querySelector(`[name="${formFieldName}"]`);
+                                if (formField) {
+                                    const valueToSet = selectedPattern.data[fieldNameKey];
+                                    if (formField.type === 'checkbox') {
+                                        formField.checked = (String(valueToSet).toLowerCase() === 'true' || String(valueToSet).toLowerCase() === 'on');
+                                    } else if (formField.type === 'file') {
+                                        // Cannot set file input value programmatically for security reasons
+                                        console.warn(`Cannot set value for file input: ${formFieldName}`);
+                                        // Display a message or link to the file if path is in pattern data
+                                        let fileInfoElement = document.getElementById(`${formFieldName}_pattern_file_info`);
+                                        if (!fileInfoElement) {
+                                            fileInfoElement = document.createElement('small');
+                                            fileInfoElement.id = `${formFieldName}_pattern_file_info`;
+                                            fileInfoElement.classList.add('form-text', 'text-info');
+                                            formField.parentNode.insertBefore(fileInfoElement, formField.nextSibling);
+                                        }
+                                        fileInfoElement.textContent = `Pattern suggests file: ${valueToSet}. Please upload manually if needed.`;
+
+                                    } else {
+                                        formField.value = valueToSet;
+                                    }
+                                } else {
+                                    console.warn(`Form field not found for pattern key: ${fieldNameKey} (tried ${formFieldName})`);
+                                }
+                            } else {
+                                console.warn(`Field definition ID not found for pattern key: ${fieldNameKey}`);
+                            }
+                        }
+                        alert('Pattern data loaded into form. Review and save.');
+                    } else {
+                        alert('Pattern data not found or is empty.');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching or applying pattern data:', error);
+                    alert('Error applying pattern.');
+                });
+        });
+    }
+});
+</script>
+{% endblock content %}

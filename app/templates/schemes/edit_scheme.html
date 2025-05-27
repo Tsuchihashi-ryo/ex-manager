@@ -1,0 +1,476 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<div class="content-section">
+    <div class="d-flex justify-content-between align-items-center">
+        <h2>{{ title }}</h2>
+        <div>
+            <a href="{{ url_for('view_scheme', scheme_id=scheme.id) }}" class="btn btn-info btn-sm">View Scheme</a>
+            <a href="{{ url_for('list_schemes') }}" class="btn btn-secondary btn-sm">Back to Schemes List</a>
+        </div>
+    </div>
+    <p>{{ scheme.description }}</p>
+    <hr>
+
+    {# Area for scheme editor controls #}
+    <div class="mb-3">
+        <button id="addNodeBtn" class="btn btn-primary btn-sm" data-toggle="modal" data-target="#nodeModal">Add Node</button>
+        {# Add other controls like 'Save Positions', 'Auto-layout' later if needed #}
+    </div>
+
+    {# Canvas for rendering the scheme #}
+    <div id="schemeCanvas" style="width: 100%; height: 600px; border: 1px solid #ccc; position: relative; overflow: auto;">
+        {# Nodes and Edges will be rendered here by JavaScript #}
+    </div>
+    <small class="form-text text-muted">Drag nodes to reposition. Click node/edge to select/edit (future). Double click to delete (future).</small>
+
+</div>
+
+{# Modal for Adding/Editing Node #}
+<div class="modal fade" id="nodeModal" tabindex="-1" role="dialog" aria-labelledby="nodeModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <form id="nodeForm"> {# No method/action, handled by JS #}
+                <div class="modal-header">
+                    <h5 class="modal-title" id="nodeModalLabel">Add New Node</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    {{ node_form.hidden_tag() if node_form.hidden_tag }} {# For CSRF if WTForms CSRF is used with AJAX #}
+                    <input type="hidden" id="nodeIdField" name="node_id">
+                    <div class="form-group">
+                        {{ node_form.label.label(class="form-control-label") }}
+                        {{ node_form.label(class="form-control form-control-sm", id="nodeLabelField") }}
+                         <div class="invalid-feedback" id="nodeLabelError"></div>
+                    </div>
+                    <div class="form-group">
+                        {{ node_form.description.label(class="form-control-label") }}
+                        {{ node_form.description(class="form-control form-control-sm", id="nodeDescriptionField", rows="2") }}
+                    </div>
+                    <div class="form-group">
+                        {{ node_form.color.label(class="form-control-label") }}
+                        {{ node_form.color(class="form-control form-control-sm", id="nodeColorField", type="color") }}
+                    </div>
+                     <div class="form-group">
+                        {{ node_form.linked_experiment_instance.label(class="form-control-label") }}
+                        {{ node_form.linked_experiment_instance(class="form-control form-control-sm", id="nodeLinkedInstanceField") }}
+                    </div>
+                    <div class="form-group">
+                        {{ node_form.linked_experiment_format.label(class="form-control-label") }}
+                        {{ node_form.linked_experiment_format(class="form-control form-control-sm", id="nodeLinkedFormatField") }}
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                    <button type="submit" class="btn btn-primary" id="saveNodeBtn">Save Node</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% endblock content %}
+
+{% block scripts %}
+{{ super() }}
+<script src="https://cdn.jsdelivr.net/npm/leader-line-new@1.1.9/leader-line.min.js"></script>
+<script src="https_cdnjs.cloudflare.com_ajax_libs_interact.js_1.10.11_interact.min.js"></script>
+
+
+<style>
+    .scheme-node {
+        position: absolute;
+        border: 1px solid #000;
+        padding: 10px;
+        cursor: grab;
+        text-align: center;
+        background-color: #fff; /* Default, will be overridden by node.color */
+        border-radius: 5px;
+        box-shadow: 2px 2px 5px rgba(0,0,0,0.1);
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        overflow: hidden; /* For text overflow */
+    }
+    .node-label {
+        font-weight: bold;
+        font-size: 0.9em;
+        margin-bottom: 5px;
+        word-break: break-word; /* Allow long labels to wrap or break */
+    }
+    .node-subtext {
+        font-size: 0.75em;
+        color: #555;
+        word-break: break-word;
+    }
+    /* Style for selected node/edge (optional) */
+    .selected {
+        border-color: blue;
+        box-shadow: 0 0 10px blue;
+    }
+</style>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const schemeCanvas = document.getElementById('schemeCanvas');
+        const schemeId = {{ scheme.id }};
+        let nodes = JSON.parse('{{ nodes_json | safe }}');
+        let edges = JSON.parse('{{ edges_json | safe }}');
+        let leaderLines = [];
+        let selectedElement = null; // To track selected node or edge for future actions like editing label
+
+        // --- CSRF Token for AJAX (if using Flask-WTF CSRFProtect) ---
+        const csrfToken = "{{ csrf_token() if csrf_token else '' }}"; 
+        const headers = {
+            'Content-Type': 'application/json',
+        };
+        if (csrfToken) {
+            headers['X-CSRFToken'] = csrfToken;
+        }
+
+        function renderNodes() {
+            schemeCanvas.innerHTML = ''; // Clear existing nodes (but not lines yet)
+            nodes.forEach(node => {
+                const nodeEl = document.createElement('div');
+                nodeEl.classList.add('scheme-node');
+                nodeEl.setAttribute('data-id', node.id);
+                nodeEl.style.left = node.pos_x + 'px';
+                nodeEl.style.top = node.pos_y + 'px';
+                nodeEl.style.width = (node.width || 150) + 'px';
+                nodeEl.style.height = (node.height || 100) + 'px';
+                nodeEl.style.backgroundColor = node.color || '#FFFFFF';
+
+                const labelEl = document.createElement('div');
+                labelEl.classList.add('node-label');
+                labelEl.textContent = node.label;
+                nodeEl.appendChild(labelEl);
+
+                if (node.linked_experiment_instance_id) {
+                    const instanceLinkEl = document.createElement('div');
+                    instanceLinkEl.classList.add('node-subtext');
+                    let linkText = `Exp: ${node.linked_experiment_instance_name || node.linked_experiment_instance_id}`;
+                    const instanceViewUrl = "{{ url_for('view_experiment_instance', instance_id=0) }}".slice(0, -1) + node.linked_experiment_instance_id;
+                    instanceLinkEl.innerHTML = `<a href="${instanceViewUrl}" target="_blank" title="View Experiment Instance">${linkText}</a>`;
+                    nodeEl.appendChild(instanceLinkEl);
+                }
+                if (node.linked_experiment_format_id) {
+                     const formatLinkEl = document.createElement('div');
+                     formatLinkEl.classList.add('node-subtext');
+                     let formatText = `Format: ${node.linked_experiment_format_name || node.linked_experiment_format_id}`;
+                     const formatViewUrl = "{{ url_for('view_experiment_format', format_id=0) }}".slice(0, -1) + node.linked_experiment_format_id;
+                     formatLinkEl.innerHTML = `<a href="${formatViewUrl}" target="_blank" title="View Experiment Format">${formatText}</a>`;
+                     nodeEl.appendChild(formatLinkEl);
+                }
+                
+                schemeCanvas.appendChild(nodeEl);
+            });
+            attachNodeEventListeners();
+        }
+
+        function renderEdges() {
+            // Clear existing lines
+            leaderLines.forEach(line => line.remove());
+            leaderLines = [];
+
+            edges.forEach(edge => {
+                const sourceNodeEl = document.querySelector(`.scheme-node[data-id='${edge.source_node_id}']`);
+                const targetNodeEl = document.querySelector(`.scheme-node[data-id='${edge.target_node_id}']`);
+                if (sourceNodeEl && targetNodeEl) {
+                    try {
+                        const line = new LeaderLine(
+                            sourceNodeEl,
+                            targetNodeEl,
+                            { 
+                                color: 'rgba(0,0,0,0.7)', 
+                                size: 2, 
+                                path: 'fluid', // or 'grid', 'straight'
+                                endPlug: 'arrow1',
+                                // Optional: Add label to edge if your library supports it easily or via overlay
+                                // middleLabel: LeaderLine.pathLabel(edge.label || '', {color: 'blue'})
+                            }
+                        );
+                        line.edge_id = edge.id; // Store edge id with the line object
+                        leaderLines.push(line);
+                    } catch (e) {
+                        console.error("Error creating LeaderLine:", e, "for edge", edge);
+                    }
+                }
+            });
+        }
+        
+        function updateLeaderLines() {
+            leaderLines.forEach(line => {
+                try {
+                    line.position();
+                } catch (e) {
+                    console.warn("Could not reposition a line, it might be orphaned:", e);
+                }
+            });
+        }
+
+        function attachNodeEventListeners() {
+            interact('.scheme-node')
+                .draggable({
+                    listeners: {
+                        start (event) {
+                            // console.log(event.type, event.target)
+                        },
+                        move (event) {
+                            const target = event.target;
+                            const nodeId = target.getAttribute('data-id');
+                            const node = nodes.find(n => n.id == nodeId);
+                            if (node) {
+                                node.pos_x += event.dx;
+                                node.pos_y += event.dy;
+                                target.style.left = node.pos_x + 'px';
+                                target.style.top = node.pos_y + 'px';
+                                updateLeaderLines();
+                            }
+                        },
+                        end (event) {
+                            const target = event.target;
+                            const nodeId = target.getAttribute('data-id');
+                            const node = nodes.find(n => n.id == nodeId);
+                            if (node) {
+                                // API call to update node position
+                                fetch(`/schemes/${schemeId}/nodes/${nodeId}`, {
+                                    method: 'PUT',
+                                    headers: headers,
+                                    body: JSON.stringify({ pos_x: node.pos_x, pos_y: node.pos_y })
+                                })
+                                .then(response => response.json())
+                                .then(data => {
+                                    if (data.error) console.error('Error updating node position:', data.error);
+                                    // else console.log('Node position updated:', data);
+                                })
+                                .catch(error => console.error('Error updating node position:', error));
+                            }
+                        }
+                    }
+                })
+                .on('tap', function (event) { // Single click/tap for selection or opening edit modal
+                    const targetNodeEl = event.currentTarget;
+                    const nodeId = targetNodeEl.getAttribute('data-id');
+                    // Basic selection visualization
+                    document.querySelectorAll('.scheme-node, .leader-line').forEach(el => el.classList.remove('selected'));
+                    targetNodeEl.classList.add('selected');
+                    selectedElement = { type: 'node', id: nodeId, element: targetNodeEl };
+                    
+                    // Populate and show modal for editing
+                    populateAndShowNodeModal(nodeId);
+                    event.preventDefault();
+                });
+        }
+
+        // --- Node Modal & Form Handling ---
+        const nodeModal = $('#nodeModal');
+        const nodeForm = document.getElementById('nodeForm');
+        const nodeIdField = document.getElementById('nodeIdField');
+        const nodeModalLabel = document.getElementById('nodeModalLabel');
+        const nodeLabelField = document.getElementById('nodeLabelField');
+        const nodeDescriptionField = document.getElementById('nodeDescriptionField');
+        const nodeColorField = document.getElementById('nodeColorField');
+        const nodeLinkedInstanceField = document.getElementById('nodeLinkedInstanceField');
+        const nodeLinkedFormatField = document.getElementById('nodeLinkedFormatField');
+        const nodeLabelError = document.getElementById('nodeLabelError');
+
+
+        document.getElementById('addNodeBtn').addEventListener('click', function() {
+            nodeModalLabel.textContent = 'Add New Node';
+            nodeForm.reset(); // Clear form
+            nodeIdField.value = ''; // Ensure no node ID for creation
+            nodeLabelError.textContent = '';
+            nodeLabelField.classList.remove('is-invalid');
+            // Set default position (e.g., center of current view or a fixed point)
+            // For now, let backend handle default if not provided
+        });
+
+        function populateAndShowNodeModal(nodeId) {
+            const node = nodes.find(n => n.id == nodeId);
+            if (!node) return;
+
+            nodeModalLabel.textContent = `Edit Node: ${node.label}`;
+            nodeIdField.value = node.id;
+            nodeLabelField.value = node.label;
+            nodeDescriptionField.value = node.description || '';
+            nodeColorField.value = node.color || '#FFFFFF';
+            nodeLinkedInstanceField.value = node.linked_experiment_instance_id || '';
+            nodeLinkedFormatField.value = node.linked_experiment_format_id || '';
+            nodeLabelError.textContent = '';
+            nodeLabelField.classList.remove('is-invalid');
+            nodeModal.modal('show');
+        }
+        
+        nodeForm.addEventListener('submit', function(event) {
+            event.preventDefault();
+            nodeLabelError.textContent = '';
+            nodeLabelField.classList.remove('is-invalid');
+
+            const nodeId = nodeIdField.value;
+            const nodeData = {
+                label: nodeLabelField.value,
+                description: nodeDescriptionField.value,
+                color: nodeColorField.value,
+                linked_experiment_instance_id: nodeLinkedInstanceField.value || null,
+                linked_experiment_format_id: nodeLinkedFormatField.value || null,
+                // Positions are updated by drag-and-drop, but could be included here if needed
+            };
+
+            if (!nodeData.label.trim()) {
+                nodeLabelField.classList.add('is-invalid');
+                nodeLabelError.textContent = 'Label is required.';
+                return;
+            }
+
+            const url = nodeId ? `/schemes/${schemeId}/nodes/${nodeId}` : `/schemes/${schemeId}/nodes`;
+            const method = nodeId ? 'PUT' : 'POST';
+
+            fetch(url, {
+                method: method,
+                headers: headers,
+                body: JSON.stringify(nodeData)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    alert(`Error: ${data.error}`);
+                    if(data.field_errors && data.field_errors.label){ // Example for specific field error
+                         nodeLabelField.classList.add('is-invalid');
+                         nodeLabelError.textContent = data.field_errors.label.join(', ');
+                    }
+                } else {
+                    if (nodeId) { // Update existing node in local array
+                        const index = nodes.findIndex(n => n.id == nodeId);
+                        if (index !== -1) nodes[index] = data.node;
+                    } else { // Add new node to local array
+                        nodes.push(data.node);
+                    }
+                    renderAll();
+                    nodeModal.modal('hide');
+                }
+            })
+            .catch(error => {
+                console.error('Error saving node:', error);
+                alert('An error occurred while saving the node.');
+            });
+        });
+
+        // --- Edge Creation/Deletion (Basic example, more complex UX needed for full interaction) ---
+        let sourceNodeForEdge = null;
+
+        schemeCanvas.addEventListener('click', function(event) {
+            const clickedNodeEl = event.target.closest('.scheme-node');
+            
+            if (clickedNodeEl) { // Clicked on a node
+                const nodeId = clickedNodeEl.getAttribute('data-id');
+                if (!sourceNodeForEdge) {
+                    sourceNodeForEdge = nodeId;
+                    clickedNodeEl.classList.add('selected'); // Highlight source
+                    // console.log(`Source node ${nodeId} selected for edge creation.`);
+                } else if (sourceNodeForEdge !== nodeId) {
+                    // Second node clicked, create edge
+                    const targetNodeId = nodeId;
+                    // console.log(`Target node ${targetNodeId} selected. Creating edge from ${sourceNodeForEdge} to ${targetNodeId}.`);
+                    
+                    const edgeData = {
+                        source_node_id: parseInt(sourceNodeForEdge),
+                        target_node_id: parseInt(targetNodeId),
+                        label: '' // Prompt for label later if needed
+                    };
+
+                    fetch(`/schemes/${schemeId}/edges`, {
+                        method: 'POST',
+                        headers: headers,
+                        body: JSON.stringify(edgeData)
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.error) {
+                            alert(`Error creating edge: ${data.error}`);
+                        } else {
+                            edges.push(data.edge);
+                            renderEdges(); // Re-render edges
+                        }
+                        // Reset selection
+                        document.querySelectorAll('.scheme-node.selected').forEach(el => el.classList.remove('selected'));
+                        sourceNodeForEdge = null;
+                    })
+                    .catch(error => {
+                        console.error('Error creating edge:', error);
+                        alert('An error occurred while creating the edge.');
+                        document.querySelectorAll('.scheme-node.selected').forEach(el => el.classList.remove('selected'));
+                        sourceNodeForEdge = null;
+                    });
+                }
+            } else { // Clicked on canvas (not a node)
+                 if (sourceNodeForEdge) { // Deselect if clicked away
+                    document.querySelectorAll('.scheme-node.selected').forEach(el => el.classList.remove('selected'));
+                    sourceNodeForEdge = null;
+                 }
+                 // Handle edge selection/deselection if leader-line elements are made clickable
+                 // This part is tricky with LeaderLine as lines are SVG elements not easily targeted without library support.
+            }
+        });
+        
+        // --- Keydown listener for Delete key ---
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'Delete' || event.key === 'Backspace') {
+                if (selectedElement) {
+                    if (selectedElement.type === 'node') {
+                        if (confirm(`Are you sure you want to delete node "${nodes.find(n=>n.id == selectedElement.id)?.label}" and its connected edges?`)) {
+                            deleteNodeFromServer(selectedElement.id);
+                        }
+                    } else if (selectedElement.type === 'edge') { // Assuming 'edge' selection is implemented
+                         if (confirm(`Are you sure you want to delete this edge?`)) {
+                            deleteEdgeFromServer(selectedElement.id);
+                        }
+                    }
+                     selectedElement = null; // Deselect after action
+                }
+            }
+        });
+
+        function deleteNodeFromServer(nodeId) {
+            fetch(`/schemes/${schemeId}/nodes/${nodeId}`, { method: 'DELETE', headers: headers })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    alert(`Error deleting node: ${data.error}`);
+                } else {
+                    nodes = nodes.filter(n => n.id != nodeId);
+                    // Edges connected to this node are deleted by cascade on backend,
+                    // so we need to refresh edges from server or filter them locally.
+                    // For simplicity, let's filter locally.
+                    edges = edges.filter(e => e.source_node_id != nodeId && e.target_node_id != nodeId);
+                    renderAll();
+                }
+            })
+            .catch(error => console.error('Error deleting node:', error));
+        }
+
+        function deleteEdgeFromServer(edgeId) { // This function would be called if edge selection was implemented
+            fetch(`/schemes/${schemeId}/edges/${edgeId}`, { method: 'DELETE', headers: headers })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    alert(`Error deleting edge: ${data.error}`);
+                } else {
+                    edges = edges.filter(e => e.id != edgeId);
+                    renderEdges(); // Only re-render edges
+                }
+            })
+            .catch(error => console.error('Error deleting edge:', error));
+        }
+
+        // --- Initial Render ---
+        function renderAll() {
+            renderNodes();
+            renderEdges();
+        }
+        renderAll();
+    });
+</script>
+{% endblock scripts %}
