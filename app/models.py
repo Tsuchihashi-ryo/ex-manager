@@ -1,10 +1,12 @@
 from app import db, app # Added app import for app_context
-from sqlalchemy.dialects.postgresql import JSON as PG_JSON # If using PostgreSQL for JSON
-from sqlalchemy import JSON as SQLA_JSON # For SQLite or other DBs supporting JSON
+# from sqlalchemy.dialects.postgresql import JSON as PG_JSON # No longer needed
+from sqlalchemy.types import JSON as SQLA_JSON # Use standard SQLAlchemy JSON type
 from datetime import datetime, date 
 
-# Helper to choose JSON type based on DB dialect
-JSON_TYPE = PG_JSON if db.engine.dialect.name == 'postgresql' else SQLA_JSON
+# Use the standard SQLAlchemy JSON type by default.
+# SQLAlchemy's JSON type attempts to use native JSON types where available
+# (e.g., on PostgreSQL, MySQL) and falls back to TEXT otherwise.
+JSON_TYPE = SQLA_JSON
 
 
 class User(db.Model):
