@@ -2,7 +2,7 @@
 {% block content %}
     <div class="content-section">
         <h2>{{ title }}</h2>
-        <p>Format: <strong>{{ format.name }}</strong> | Created by: {{ instance.author.username }} on {{ instance.creation_date.strftime('%Y-%m-%d') }}</p>
+        <p>Format: <strong>{{ format.name }}</strong> | Created by: {{ instance.username }} on {{ instance.creation_date.strftime('%Y-%m-%d') }}</p>
         <hr>
 
         {# Form for Main Experiment Details (Title, Date, Status) #}

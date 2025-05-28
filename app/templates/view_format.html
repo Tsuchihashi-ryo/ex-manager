@@ -54,7 +54,7 @@
                 {% for instance in format.instances | sort(attribute='title') %}
                     <li class="list-group-item">
                         <a href="{{ url_for('view_experiment_instance', instance_id=instance.id) }}">{{ instance.title }}</a> 
-                        (Status: {{ instance.status }}, By: {{ instance.author.username }})
+                        (Status: {{ instance.status }}, By: {{ instance.username }})
                     </li>
                 {% else %} 
                     {# This 'else' for the loop is unusual here, typically it's for empty list after loop #}
