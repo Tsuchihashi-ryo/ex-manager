@@ -4,12 +4,11 @@
     <div class="d-flex justify-content-between align-items-center mb-3">
         <h2>{{ layout.name }}</h2>
         <div>
-            {% if layout.user_id == current_user.id %}
-                <a href="{{ url_for('edit_plate_layout', layout_id=layout.id) }}" class="btn btn-outline-secondary btn-sm">Edit Layout</a>
-                <form action="{{ url_for('delete_plate_layout', layout_id=layout.id) }}" method="POST" style="display:inline;">
-                    <input type="submit" value="Delete Layout" class="btn btn-outline-danger btn-sm" onclick="return confirm('Are you sure you want to delete this layout template?');">
-                </form>
-            {% endif %}
+            {# Permissions removed, actions are now unconditionally available #}
+            <a href="{{ url_for('edit_plate_layout', layout_id=layout.id) }}" class="btn btn-outline-secondary btn-sm">Edit Layout</a>
+            <form action="{{ url_for('delete_plate_layout', layout_id=layout.id) }}" method="POST" style="display:inline;">
+                <input type="submit" value="Delete Layout" class="btn btn-outline-danger btn-sm" onclick="return confirm('Are you sure you want to delete this layout template?');">
+            </form>
         </div>
     </div>
 
@@ -23,7 +22,7 @@
             {% else %}
                 <p><strong>Number of Tubes/Wells:</strong> {{ layout.num_tubes }}</p>
             {% endif %}
-            <p><strong>Created by:</strong> {{ layout.creator.username }}</p>
+            <p><strong>Created by:</strong> {{ layout.creator_username }}</p> {# Changed from layout.creator.username #}
         </div>
     </div>
 
@@ -93,7 +92,7 @@
                     <li class="list-group-item">
                         <a href="{{ url_for('view_experiment_instance', instance_id=link.experiment_instance.id) }}">{{ link.experiment_instance.title }}</a>
                         (as "{{ link.name_in_experiment }}")
-                        <span class="text-muted float-right">By: {{ link.experiment_instance.author.username }}</span>
+                        <span class="text-muted float-right">By: {{ link.experiment_instance.username }}</span> {# Changed from link.experiment_instance.author.username #}
                     </li>
                 {% endfor %}
             </ul>

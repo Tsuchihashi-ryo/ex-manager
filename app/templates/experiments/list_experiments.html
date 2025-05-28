@@ -36,13 +36,9 @@
                 <div class="col-md-3">
                     <input type="date" name="date_to" class="form-control form-control-sm" placeholder="Date To" value="{{ request.args.get('date_to', '') }}">
                 </div>
+                {# User filter removed as all_users is no longer passed to the template #}
                 <div class="col-md-3">
-                    <select name="user_filter" class="form-control form-control-sm">
-                        <option value="">-- All Users --</option>
-                        {% for user in all_users %}
-                            <option value="{{ user.id }}" {% if request.args.get('user_filter')|int == user.id %}selected{% endif %}>{{ user.username }}</option>
-                        {% endfor %}
-                    </select>
+                    {# Placeholder for potential future filter or keep empty #}
                 </div>
                 <div class="col-md-3">
                     <button type="submit" class="btn btn-sm btn-outline-secondary btn-block">Filter</button>
@@ -60,7 +56,7 @@
                             <small>Last Modified: {{ experiment.last_modified_date.strftime('%Y-%m-%d %H:%M') }}</small>
                         </div>
                         <p class="mb-1">
-                            Format: {{ experiment.experiment_format_ref.name }} | Status: <span class="badge badge-info">{{ experiment.status }}</span> | By: {{ experiment.author.username }}
+                            Format: {{ experiment.experiment_format_ref.name }} | Status: <span class="badge badge-info">{{ experiment.status }}</span> | By: {{ experiment.username }} {# Changed from experiment.author.username #}
                         </p>
                         <small>Experiment Date: {{ experiment.experiment_date.strftime('%Y-%m-%d') }}</small>
                     </a>

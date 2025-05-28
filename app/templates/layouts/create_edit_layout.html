@@ -21,6 +21,19 @@
                 {{ form.description(class="form-control form-control-lg") }}
                 {% if form.description.errors %}<div class="invalid-feedback d-block">{% for error in form.description.errors %}<span>{{ error }}</span>{% endfor %}</div>{% endif %}
             </div>
+            {% if not layout %} {# Only show creator_username on create #}
+            <div class="form-group">
+                {{ form.creator_username.label(class="form-control-label") }}
+                {% if form.creator_username.errors %}
+                    {{ form.creator_username(class="form-control form-control-lg is-invalid") }}
+                    <div class="invalid-feedback">
+                        {% for error in form.creator_username.errors %}<span>{{ error }}</span>{% endfor %}
+                    </div>
+                {% else %}
+                    {{ form.creator_username(class="form-control form-control-lg") }}
+                {% endif %}
+            </div>
+            {% endif %}
             <div class="form-group">
                 {{ form.layout_type.label(class="form-control-label") }}
                 {% if layout %} {# If editing, layout_type is not changeable through this form to maintain integrity #}

@@ -31,6 +31,19 @@
                         {{ form.description(class="form-control form-control-lg", rows=3) }}
                     {% endif %}
                 </div>
+                <div class="form-group">
+                    {{ form.creator_username.label(class="form-control-label") }}
+                    {% if form.creator_username.errors %}
+                        {{ form.creator_username(class="form-control form-control-lg is-invalid") }}
+                        <div class="invalid-feedback">
+                            {% for error in form.creator_username.errors %}
+                                <span>{{ error }}</span>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        {{ form.creator_username(class="form-control form-control-lg") }}
+                    {% endif %}
+                </div>
             </fieldset>
             <div class="form-group">
                 {{ form.submit(class="btn btn-outline-info") }}

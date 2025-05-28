@@ -8,21 +8,6 @@ from datetime import datetime, date
 # (e.g., on PostgreSQL, MySQL) and falls back to TEXT otherwise.
 JSON_TYPE = SQLA_JSON
 
-
-class User(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(20), unique=True, nullable=False)
-    email = db.Column(db.String(120), unique=True, nullable=False)
-    image_file = db.Column(db.String(20), nullable=False, default='default.jpg')
-    password = db.Column(db.String(60), nullable=False)
-    experiments = db.relationship('ExperimentInstance', backref='author', lazy=True)
-    change_logs = db.relationship('ExperimentChangeLog', backref='user', lazy=True)
-    plate_layouts = db.relationship('PlateLayout', backref='creator', lazy=True)
-
-
-    def __repr__(self):
-        return f"User('{self.username}', '{self.email}', '{self.image_file}')"
-
 class ExperimentFormat(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False, unique=True)
@@ -67,8 +52,7 @@ class ExperimentInstance(db.Model):
     last_modified_date = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
     experiment_date = db.Column(db.Date, nullable=False)
     status = db.Column(db.String(50), nullable=False, default="DRAFT")
-    
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    username = db.Column(db.String(100), nullable=False) # Added
     format_id = db.Column(db.Integer, db.ForeignKey('experiment_format.id'), nullable=False)
     
     field_values = db.relationship('ExperimentFieldValue', backref='experiment_instance', lazy=True, cascade="all, delete-orphan")
@@ -77,7 +61,7 @@ class ExperimentInstance(db.Model):
 
 
     def __repr__(self):
-        return f"ExperimentInstance('{self.title}', Status: '{self.status}', Author: '{self.author.username}')"
+        return f"ExperimentInstance('{self.title}', Status: '{self.status}', User: '{self.username}')" # Updated
 
 class ExperimentFieldValue(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -94,14 +78,14 @@ class ExperimentChangeLog(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     experiment_instance_id = db.Column(db.Integer, db.ForeignKey('experiment_instance.id'), nullable=False)
     timestamp = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False) 
+    username = db.Column(db.String(100), nullable=False) # Added
     field_name = db.Column(db.String(100), nullable=False) 
     old_value = db.Column(db.Text, nullable=True)
     new_value = db.Column(db.Text, nullable=True)
 
     def __repr__(self):
         with app.app_context(): 
-            return f"ChangeLog(Instance: '{self.experiment_instance.title}', Field: '{self.field_name}', User: '{self.user.username}')"
+            return f"ChangeLog(Instance: '{self.experiment_instance.title}', Field: '{self.field_name}', User: '{self.username}')" # Updated
 
 # New Models for Plate Layout Management
 
@@ -113,8 +97,7 @@ class PlateLayout(db.Model):
     rows = db.Column(db.Integer, nullable=True)
     columns = db.Column(db.Integer, nullable=True)
     num_tubes = db.Column(db.Integer, nullable=True)
-    
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False) # Creator
+    creator_username = db.Column(db.String(100), nullable=False) # Added
     
     custom_property_definitions = db.relationship('WellPropertyDefinition', backref='plate_layout', lazy=True, cascade="all, delete-orphan")
     # This relationship might be complex if a layout is a template vs. instance specific
@@ -166,17 +149,17 @@ class ExperimentScheme(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(150), nullable=False)
     description = db.Column(db.Text, nullable=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    creator_username = db.Column(db.String(100), nullable=False) # Added
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     nodes = db.relationship('SchemeNode', backref='scheme', lazy='dynamic', cascade="all, delete-orphan")
     edges = db.relationship('SchemeEdge', backref='scheme', lazy='dynamic', cascade="all, delete-orphan")
     
-    creator = db.relationship('User', backref='schemes') # Define the backref for User.schemes
+    # creator = db.relationship('User', backref='schemes') # Removed
 
     def __repr__(self):
-        return f"ExperimentScheme('{self.name}', User: '{self.creator.username}')"
+        return f"ExperimentScheme('{self.name}', User: '{self.creator_username}')" # Updated
 
 class SchemeNode(db.Model):
     id = db.Column(db.Integer, primary_key=True)

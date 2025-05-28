@@ -11,19 +11,17 @@ from openpyxl.utils import get_column_letter
 from xhtml2pdf import pisa  # For PDF export
 from app import app, db, bcrypt
 from app.forms import (
-    RegistrationForm, LoginForm, 
     ExperimentFormatForm, FieldDefinitionForm, FormatPatternForm,
     CreateExperimentInstanceForm, generate_dynamic_data_form,
     # Plate Layout Forms
     PlateLayoutForm, WellPropertyDefinitionForm, LinkPlateToExperimentForm, generate_well_data_form
 )
 from app.models import (
-    User, ExperimentFormat, FieldDefinition, FormatPattern,
+    ExperimentFormat, FieldDefinition, FormatPattern, # Removed User
     ExperimentInstance, ExperimentFieldValue, ExperimentChangeLog,
     # Plate Layout Models
     PlateLayout, WellPropertyDefinition, ExperimentPlateLink, WellData
 )
-from flask_login import login_user, current_user, logout_user, login_required
 
 # Helper function to save uploaded files
 def save_file(form_file_data, experiment_id, field_id):
@@ -46,14 +44,14 @@ def save_file(form_file_data, experiment_id, field_id):
     return file_path # Or static_path, depending on serving strategy
 
 # Helper function to log changes
-def log_experiment_change(instance_id, user_id, field_name, old_value, new_value):
+def log_experiment_change(instance_id, username, field_name, old_value, new_value):
     # Avoid logging if value hasn't actually changed
     if str(old_value) == str(new_value): # Compare as strings to handle various types
         return
 
     change = ExperimentChangeLog(
         experiment_instance_id=instance_id,
-        user_id=user_id,
+        username=username,
         field_name=field_name,
         old_value=str(old_value) if old_value is not None else None,
         new_value=str(new_value) if new_value is not None else None
@@ -67,49 +65,8 @@ def log_experiment_change(instance_id, user_id, field_name, old_value, new_value
 def home():
     return render_template('home.html', title='Home')
 
-@app.route("/register", methods=['GET', 'POST'])
-def register():
-    if current_user.is_authenticated:
-        return redirect(url_for('home'))
-    form = RegistrationForm()
-    if form.validate_on_submit():
-        hashed_password = bcrypt.generate_password_hash(form.password.data).decode('utf-8')
-        user = User(username=form.username.data, email=form.email.data, password=hashed_password)
-        db.session.add(user)
-        db.session.commit()
-        flash('Your account has been created! You are now able to log in', 'success')
-        return redirect(url_for('login'))
-    return render_template('register.html', title='Register', form=form)
-
-@app.route("/login", methods=['GET', 'POST'])
-def login():
-    if current_user.is_authenticated:
-        return redirect(url_for('home'))
-    form = LoginForm()
-    if form.validate_on_submit():
-        user = User.query.filter_by(email=form.email.data).first()
-        if user and bcrypt.check_password_hash(user.password, form.password.data):
-            login_user(user, remember=form.remember.data)
-            next_page = request.args.get('next')
-            return redirect(next_page) if next_page else redirect(url_for('home'))
-        else:
-            flash('Login Unsuccessful. Please check email and password', 'danger')
-    return render_template('login.html', title='Login', form=form)
-
-@app.route("/logout")
-def logout():
-    logout_user()
-    return redirect(url_for('home'))
-
-@app.route("/account")
-@login_required
-def account():
-    image_file = url_for('static', filename='profile_pics/' + current_user.image_file)
-    return render_template('account.html', title='Account', image_file=image_file)
-
 # Experiment Format Routes (Existing - Keep them)
 @app.route("/formats")
-@login_required
 def list_experiment_formats():
     search_term = request.args.get('search', '')
     if search_term:
@@ -122,7 +79,6 @@ def list_experiment_formats():
     return render_template('list_formats.html', formats=formats, title="Experiment Formats", search_term=search_term)
 
 @app.route("/formats/new", methods=['GET', 'POST'])
-@login_required
 def create_experiment_format():
     form = ExperimentFormatForm()
     if form.validate_on_submit():
@@ -134,13 +90,11 @@ def create_experiment_format():
     return render_template('create_format.html', title='Create Experiment Format', form=form)
 
 @app.route("/formats/<int:format_id>/view")
-@login_required
 def view_experiment_format(format_id):
     exp_format = ExperimentFormat.query.get_or_404(format_id)
     return render_template('view_format.html', title=exp_format.name, format=exp_format)
 
 @app.route("/formats/<int:format_id>/edit", methods=['GET', 'POST'])
-@login_required
 def edit_experiment_format(format_id):
     exp_format = ExperimentFormat.query.get_or_404(format_id)
     form = ExperimentFormatForm(obj=exp_format)
@@ -170,7 +124,6 @@ def edit_experiment_format(format_id):
                            format_form=form, field_form=field_form, format=exp_format)
 
 @app.route("/formats/<int:format_id>/delete", methods=['POST'])
-@login_required
 def delete_experiment_format(format_id):
     exp_format = ExperimentFormat.query.get_or_404(format_id)
     if exp_format.instances: # Check if format is in use
@@ -182,7 +135,6 @@ def delete_experiment_format(format_id):
     return redirect(url_for('list_experiment_formats'))
 
 @app.route("/formats/field/<int:field_id>/delete", methods=['POST'])
-@login_required
 def delete_field_definition(field_id):
     field = FieldDefinition.query.get_or_404(field_id)
     format_id = field.experiment_format_id
@@ -196,7 +148,6 @@ def delete_field_definition(field_id):
     return redirect(url_for('edit_experiment_format', format_id=format_id))
 
 @app.route("/formats/<int:format_id>/patterns/new", methods=['GET', 'POST'])
-@login_required
 def create_format_pattern(format_id):
     exp_format = ExperimentFormat.query.get_or_404(format_id)
     form = FormatPatternForm()
@@ -219,7 +170,6 @@ def create_format_pattern(format_id):
 
 # Experiment Instance Routes
 @app.route("/experiments")
-@login_required
 def list_experiments():
     page = request.args.get('page', 1, type=int)
     query = ExperimentInstance.query.order_by(ExperimentInstance.last_modified_date.desc())
@@ -236,15 +186,13 @@ def list_experiments():
     if format_filter:
         query = query.filter(ExperimentInstance.format_id == format_filter)
 
-    experiments = query.paginate(page=page, per_page=10) # 10 experiments per page
-    status_choices = CreateExperimentInstanceForm().status.choices # Get choices from form
-    all_formats = ExperimentFormat.query.order_by(ExperimentFormat.name).all()
-    all_users = User.query.order_by(User.username).all() # For filtering by user
+    # Removed user filter parts
+    # all_users = User.query.order_by(User.username).all() # For filtering by user
     
     # Get date range from request args
     date_from_str = request.args.get('date_from')
     date_to_str = request.args.get('date_to')
-    user_filter = request.args.get('user_filter', type=int)
+    # user_filter = request.args.get('user_filter', type=int) # Removed
 
     if date_from_str:
         try:
@@ -259,19 +207,20 @@ def list_experiments():
         except ValueError:
             flash('Invalid "Date To" format. Please use YYYY-MM-DD.', 'warning')
     
-    if user_filter:
-        query = query.filter(ExperimentInstance.user_id == user_filter)
+    # if user_filter: # Removed
+    #     query = query.filter(ExperimentInstance.user_id == user_filter) # Removed
 
     experiments = query.paginate(page=page, per_page=10) 
+    status_choices = CreateExperimentInstanceForm().status.choices # Get choices from form
+    all_formats = ExperimentFormat.query.order_by(ExperimentFormat.name).all()
         
     return render_template('experiments/list_experiments.html', experiments=experiments, title="Experiments",
-                           status_choices=status_choices, all_formats=all_formats, all_users=all_users,
+                           status_choices=status_choices, all_formats=all_formats, # Removed all_users
                            search_title=search_title, status_filter=status_filter, format_filter=format_filter,
-                           date_from=date_from_str, date_to=date_to_str, user_filter=user_filter)
+                           date_from=date_from_str, date_to=date_to_str) # Removed user_filter
 
 
 @app.route("/experiments/new", methods=['GET', 'POST'])
-@login_required
 def create_experiment_instance():
     form = CreateExperimentInstanceForm()
     # Dynamically set choices for experiment_format if needed, or rely on QuerySelectField
@@ -284,13 +233,13 @@ def create_experiment_instance():
             title=form.title.data,
             experiment_date=form.experiment_date.data,
             status=form.status.data,
-            user_id=current_user.id,
+            username=form.username.data, # Added username from form
             format_id=form.experiment_format.data.id 
         )
         db.session.add(instance)
         db.session.flush() # Get the ID for the instance before committing
         
-        log_experiment_change(instance.id, current_user.id, "Experiment", None, "Created")
+        log_experiment_change(instance.id, form.username.data, "Experiment", None, "Created") # Updated username
         db.session.commit()
         
         flash('Experiment shell created. Proceed to enter data.', 'success')
@@ -299,12 +248,12 @@ def create_experiment_instance():
     return render_template('experiments/create_experiment_instance.html', title='Create New Experiment', form=form)
 
 @app.route("/experiments/<int:instance_id>/edit", methods=['GET', 'POST'])
-@login_required
 def edit_experiment_instance(instance_id):
     instance = ExperimentInstance.query.get_or_404(instance_id)
-    if instance.author != current_user and not current_user.is_admin: # Assuming an is_admin property or role
-        flash('You do not have permission to edit this experiment.', 'danger')
-        return redirect(url_for('list_experiments'))
+    # Removed permission check:
+    # if instance.author != current_user and not current_user.is_admin:
+    #     flash('You do not have permission to edit this experiment.', 'danger')
+    #     return redirect(url_for('list_experiments'))
 
     exp_format = instance.experiment_format_ref
     
@@ -403,7 +352,7 @@ def edit_experiment_instance(instance_id):
                     )
                     db.session.add(field_value_obj)
                 
-                log_experiment_change(instance.id, current_user.id, field_def.name, old_db_value, submitted_value)
+                log_experiment_change(instance.id, instance.username, field_def.name, old_db_value, submitted_value) # Updated username
 
         instance.last_modified_date = datetime.utcnow()
         db.session.commit()
@@ -416,9 +365,9 @@ def edit_experiment_instance(instance_id):
 
     # If main details form (title, status, etc.) is submitted
     if main_details_form.validate_on_submit() and 'submit_details' in request.form:
-        log_experiment_change(instance.id, current_user.id, "Title", instance.title, main_details_form.title.data)
-        log_experiment_change(instance.id, current_user.id, "Experiment Date", str(instance.experiment_date), str(main_details_form.experiment_date.data))
-        log_experiment_change(instance.id, current_user.id, "Status", instance.status, main_details_form.status.data)
+        log_experiment_change(instance.id, instance.username, "Title", instance.title, main_details_form.title.data) # Updated username
+        log_experiment_change(instance.id, instance.username, "Experiment Date", str(instance.experiment_date), str(main_details_form.experiment_date.data)) # Updated username
+        log_experiment_change(instance.id, instance.username, "Status", instance.status, main_details_form.status.data) # Updated username
         # Format cannot be changed after creation for simplicity now
         
         instance.title = main_details_form.title.data
@@ -439,7 +388,6 @@ def edit_experiment_instance(instance_id):
 
 
 @app.route("/experiments/<int:instance_id>")
-@login_required
 def view_experiment_instance(instance_id):
     instance = ExperimentInstance.query.get_or_404(instance_id)
     # field_values are mapped by field_definition.name for easier template access
@@ -457,6 +405,8 @@ def view_experiment_instance(instance_id):
     # This also needs adjustment based on how paths are stored.
     # If fv.value is like 'exp_id/field_id/filename.txt' (relative to UPLOAD_FOLDER)
     # and UPLOAD_FOLDER is 'app/static/uploads', then url is 'static', 'uploads/' + fv.value
+    # The instance object itself (which now has 'username') is passed to the template.
+    # The template can access instance.username directly.
     
     change_logs = ExperimentChangeLog.query.filter_by(experiment_instance_id=instance.id).order_by(ExperimentChangeLog.timestamp.desc()).all()
     
@@ -467,12 +417,12 @@ def view_experiment_instance(instance_id):
 
 
 @app.route("/experiments/<int:instance_id>/delete", methods=['POST'])
-@login_required
 def delete_experiment_instance(instance_id):
     instance = ExperimentInstance.query.get_or_404(instance_id)
-    if instance.author != current_user and not current_user.is_admin: # Basic permission check
-        flash('You do not have permission to delete this experiment.', 'danger')
-        return redirect(url_for('list_experiments'))
+    # Removed permission check:
+    # if instance.author != current_user and not current_user.is_admin:
+    #     flash('You do not have permission to delete this experiment.', 'danger')
+    #     return redirect(url_for('list_experiments'))
     
     # Manually delete associated files if any (cascade delete won't handle filesystem)
     for fv in instance.field_values:
@@ -496,7 +446,6 @@ def delete_experiment_instance(instance_id):
 
 # AJAX route to get patterns for a selected format (optional, for better UX)
 @app.route("/experiments/get_patterns/<int:format_id>")
-@login_required
 def get_patterns(format_id):
     patterns = FormatPattern.query.filter_by(experiment_format_id=format_id).all()
     pattern_list = [{"id": p.id, "name": p.name, "data": p.pattern_data} for p in patterns]
@@ -504,7 +453,6 @@ def get_patterns(format_id):
 
 # AJAX route to get field definitions for a selected format (for dynamic form updates if needed)
 @app.route("/experiments/get_format_fields/<int:format_id>")
-@login_required
 def get_format_fields(format_id):
     exp_format = ExperimentFormat.query.get_or_404(format_id)
     field_list = [
@@ -517,9 +465,8 @@ def get_format_fields(format_id):
 
 # Plate Layout Management Routes
 @app.route("/layouts")
-@login_required
 def list_plate_layouts():
-    query = PlateLayout.query.filter_by(user_id=current_user.id) # Base query for current user
+    query = PlateLayout.query # Removed user_id filter
     
     search_term = request.args.get('search_term', '')
     layout_type_filter = request.args.get('layout_type_filter', '')
@@ -544,7 +491,6 @@ def list_plate_layouts():
                            layout_type_choices=layout_type_choices)
 
 @app.route("/layouts/new", methods=['GET', 'POST'])
-@login_required
 def create_plate_layout():
     form = PlateLayoutForm()
     if form.validate_on_submit():
@@ -555,7 +501,7 @@ def create_plate_layout():
             rows=form.rows.data if form.layout_type.data != 'CUSTOM_TUBES' else None,
             columns=form.columns.data if form.layout_type.data != 'CUSTOM_TUBES' else None,
             num_tubes=form.num_tubes.data if form.layout_type.data == 'CUSTOM_TUBES' else None,
-            user_id=current_user.id
+            creator_username=form.creator_username.data # Added creator_username
         )
         db.session.add(plate_layout)
         db.session.commit()
@@ -566,12 +512,12 @@ def create_plate_layout():
 
 
 @app.route("/layouts/<int:layout_id>/edit", methods=['GET', 'POST'])
-@login_required
 def edit_plate_layout(layout_id):
     layout = PlateLayout.query.get_or_404(layout_id)
-    if layout.user_id != current_user.id:
-        flash('You are not authorized to edit this layout.', 'danger')
-        return redirect(url_for('list_plate_layouts'))
+    # Removed permission check:
+    # if layout.user_id != current_user.id:
+    #     flash('You are not authorized to edit this layout.', 'danger')
+    #     return redirect(url_for('list_plate_layouts'))
 
     form = PlateLayoutForm(obj=layout)
     # For adding new properties, we use a separate simple form instance.
@@ -610,22 +556,22 @@ def edit_plate_layout(layout_id):
 
 
 @app.route("/layouts/<int:layout_id>")
-@login_required
 def view_plate_layout(layout_id):
     layout = PlateLayout.query.get_or_404(layout_id)
-    if layout.user_id != current_user.id: # Basic permission
-         flash('You are not authorized to view this layout.', 'danger')
-         return redirect(url_for('list_plate_layouts'))
+    # Removed permission check:
+    # if layout.user_id != current_user.id:
+    #      flash('You are not authorized to view this layout.', 'danger')
+    #      return redirect(url_for('list_plate_layouts'))
     return render_template('layouts/view_layout.html', layout=layout, title=f"View: {layout.name}")
 
 
 @app.route("/layouts/<int:layout_id>/delete", methods=['POST'])
-@login_required
 def delete_plate_layout(layout_id):
     layout = PlateLayout.query.get_or_404(layout_id)
-    if layout.user_id != current_user.id:
-        flash('You are not authorized to delete this layout.', 'danger')
-        return redirect(url_for('list_plate_layouts'))
+    # Removed permission check:
+    # if layout.user_id != current_user.id:
+    #     flash('You are not authorized to delete this layout.', 'danger')
+    #     return redirect(url_for('list_plate_layouts'))
     
     if layout.experiment_links: # Check if layout is currently linked to any experiments
         flash('This plate layout is linked to one or more experiments and cannot be deleted. Please unlink it from experiments first.', 'danger')
@@ -638,13 +584,13 @@ def delete_plate_layout(layout_id):
     return redirect(url_for('list_plate_layouts'))
 
 @app.route("/layouts/property/<int:property_id>/delete", methods=['POST'])
-@login_required
 def delete_well_property_definition(property_id):
     prop_def = WellPropertyDefinition.query.get_or_404(property_id)
     layout = prop_def.plate_layout
-    if layout.user_id != current_user.id:
-        flash('Not authorized.', 'danger')
-        return redirect(url_for('list_plate_layouts')) 
+    # Removed permission check:
+    # if layout.user_id != current_user.id:
+    #     flash('Not authorized.', 'danger')
+    #     return redirect(url_for('list_plate_layouts')) 
 
     data_exists_for_property = False
     for link in layout.experiment_links:
@@ -668,16 +614,16 @@ def delete_well_property_definition(property_id):
 # Routes for Linking Plates to Experiments and Managing Well Data
 
 @app.route("/experiments/<int:instance_id>/layouts/add", methods=['GET', 'POST'])
-@login_required
 def link_plate_to_experiment(instance_id):
     experiment = ExperimentInstance.query.get_or_404(instance_id)
-    if experiment.author != current_user: # Basic permission check
-        flash('You are not authorized to modify this experiment.', 'danger')
-        return redirect(url_for('view_experiment_instance', instance_id=instance_id))
+    # Removed permission check:
+    # if experiment.author != current_user:
+    #     flash('You are not authorized to modify this experiment.', 'danger')
+    #     return redirect(url_for('view_experiment_instance', instance_id=instance_id))
 
     form = LinkPlateToExperimentForm()
-    # Ensure the query_factory for plate_layout only shows layouts by the current user or shared layouts (if that feature is added)
-    form.plate_layout.query = PlateLayout.query.filter_by(user_id=current_user.id).order_by(PlateLayout.name).all()
+    # Ensure the query_factory for plate_layout shows all layouts
+    form.plate_layout.query = PlateLayout.query.order_by(PlateLayout.name).all()
 
 
     if form.validate_on_submit():
@@ -696,7 +642,7 @@ def link_plate_to_experiment(instance_id):
             )
             db.session.add(plate_link)
             # Log this change
-            log_experiment_change(instance_id, current_user.id, "Experiment Plate Layout", None, f"Linked: {plate_link.name_in_experiment} (Layout: {form.plate_layout.data.name})")
+            log_experiment_change(instance_id, experiment.username, "Experiment Plate Layout", None, f"Linked: {plate_link.name_in_experiment} (Layout: {form.plate_layout.data.name})") # Updated username
             db.session.commit()
             flash(f'Plate layout "{form.plate_layout.data.name}" linked as "{plate_link.name_in_experiment}". You can now enter well data.', 'success')
             return redirect(url_for('edit_well_data', instance_id=instance_id, link_id=plate_link.id))
@@ -707,13 +653,13 @@ def link_plate_to_experiment(instance_id):
 
 
 @app.route("/experiments/<int:instance_id>/layout_links/<int:link_id>/data", methods=['GET', 'POST'])
-@login_required
 def edit_well_data(instance_id, link_id):
     plate_link = ExperimentPlateLink.query.get_or_404(link_id)
     experiment = plate_link.experiment_instance
-    if experiment.author != current_user:
-        flash('You are not authorized to edit data for this experiment.', 'danger')
-        return redirect(url_for('view_experiment_instance', instance_id=instance_id))
+    # Removed permission check:
+    # if experiment.author != current_user:
+    #     flash('You are not authorized to edit data for this experiment.', 'danger')
+    #     return redirect(url_for('view_experiment_instance', instance_id=instance_id))
 
     plate_layout = plate_link.plate_layout
 
@@ -783,7 +729,7 @@ def edit_well_data(instance_id, link_id):
             if changed_in_this_well:
                 new_props_json = json.dumps(well_custom_props_data) if well_custom_props_data else "{}"
                 # Log change for this specific well
-                log_experiment_change(instance_id, current_user.id, 
+                log_experiment_change(instance_id, experiment.username, # Updated username
                                       f"Well Data: {plate_link.name_in_experiment} - {well_id_str}", 
                                       old_props_json, new_props_json)
                 changes_made_summary.append(well_id_str)
@@ -808,9 +754,8 @@ def edit_well_data(instance_id, link_id):
 # --- Experiment Scheme (Workflow) Management Routes ---
 
 @app.route("/schemes")
-@login_required
 def list_schemes():
-    query = ExperimentScheme.query.filter_by(user_id=current_user.id)
+    query = ExperimentScheme.query # Removed user_id filter
     search_term = request.args.get('search_term', '')
 
     if search_term:
@@ -827,14 +772,13 @@ def list_schemes():
                            search_term=search_term)
 
 @app.route("/schemes/new", methods=['GET', 'POST'])
-@login_required
 def create_scheme():
     form = ExperimentSchemeForm() # Assuming ExperimentSchemeForm is imported
     if form.validate_on_submit():
         scheme = ExperimentScheme(
             name=form.name.data,
             description=form.description.data,
-            user_id=current_user.id
+            creator_username=form.creator_username.data # Added creator_username
         )
         db.session.add(scheme)
         db.session.commit()
@@ -843,12 +787,12 @@ def create_scheme():
     return render_template('schemes/create_scheme.html', title="Create New Experiment Scheme", form=form)
 
 @app.route("/schemes/<int:scheme_id>/edit", methods=['GET'])
-@login_required
 def edit_scheme(scheme_id):
     scheme = ExperimentScheme.query.get_or_404(scheme_id)
-    if scheme.user_id != current_user.id:
-        flash('You are not authorized to edit this scheme.', 'danger')
-        return redirect(url_for('list_schemes'))
+    # Removed permission check:
+    # if scheme.user_id != current_user.id:
+    #     flash('You are not authorized to edit this scheme.', 'danger')
+    #     return redirect(url_for('list_schemes'))
     
     node_form = SchemeNodeForm() # Assuming SchemeNodeForm is imported
     
@@ -859,12 +803,12 @@ def edit_scheme(scheme_id):
                            scheme=scheme, node_form=node_form, nodes_json=json.dumps(nodes), edges_json=json.dumps(edges))
 
 @app.route("/schemes/<int:scheme_id>/view", methods=['GET'])
-@login_required
 def view_scheme(scheme_id):
     scheme = ExperimentScheme.query.get_or_404(scheme_id)
-    if scheme.user_id != current_user.id: 
-        flash('You are not authorized to view this scheme.', 'danger')
-        return redirect(url_for('list_schemes'))
+    # Removed permission check:
+    # if scheme.user_id != current_user.id: 
+    #     flash('You are not authorized to view this scheme.', 'danger')
+    #     return redirect(url_for('list_schemes'))
     
     nodes = [node.to_dict() for node in scheme.nodes.all()]
     edges = [edge.to_dict() for edge in scheme.edges.all()]
@@ -874,12 +818,12 @@ def view_scheme(scheme_id):
 
 
 @app.route("/schemes/<int:scheme_id>/delete", methods=['POST'])
-@login_required
 def delete_scheme(scheme_id):
     scheme = ExperimentScheme.query.get_or_404(scheme_id)
-    if scheme.user_id != current_user.id:
-        flash('You are not authorized to delete this scheme.', 'danger')
-        return redirect(url_for('list_schemes'))
+    # Removed permission check:
+    # if scheme.user_id != current_user.id:
+    #     flash('You are not authorized to delete this scheme.', 'danger')
+    #     return redirect(url_for('list_schemes'))
     
     db.session.delete(scheme)
     db.session.commit()
@@ -889,11 +833,11 @@ def delete_scheme(scheme_id):
 # --- API Endpoints for Scheme Nodes & Edges ---
 
 @app.route("/schemes/<int:scheme_id>/nodes", methods=['POST'])
-@login_required
 def add_scheme_node(scheme_id):
     scheme = ExperimentScheme.query.get_or_404(scheme_id)
-    if scheme.user_id != current_user.id:
-        return jsonify(error="Unauthorized"), 403
+    # Removed permission check:
+    # if scheme.user_id != current_user.id:
+    #     return jsonify(error="Unauthorized"), 403
 
     data = request.get_json()
     if not data or not data.get('label'):
@@ -902,7 +846,8 @@ def add_scheme_node(scheme_id):
     linked_instance_id = data.get('linked_experiment_instance_id')
     if linked_instance_id:
         linked_instance = ExperimentInstance.query.get(linked_instance_id)
-        if not linked_instance or linked_instance.user_id != current_user.id:
+        # Removed user-specific check for linked_instance
+        if not linked_instance:
              return jsonify(error="Invalid or unauthorized experiment instance link."), 400
     
     linked_format_id = data.get('linked_experiment_format_id')
@@ -929,10 +874,10 @@ def add_scheme_node(scheme_id):
 
 
 @app.route("/schemes/<int:scheme_id>/nodes/<int:node_id>", methods=['PUT'])
-@login_required
 def update_scheme_node(scheme_id, node_id):
     scheme = ExperimentScheme.query.get_or_404(scheme_id)
-    if scheme.user_id != current_user.id: return jsonify(error="Unauthorized"), 403
+    # Removed permission check
+    # if scheme.user_id != current_user.id: return jsonify(error="Unauthorized"), 403
     
     node = SchemeNode.query.get_or_404(node_id)
     if node.scheme_id != scheme_id: return jsonify(error="Node not found in this scheme"), 404
@@ -952,7 +897,8 @@ def update_scheme_node(scheme_id, node_id):
         instance_id = data['linked_experiment_instance_id']
         if instance_id: # If an ID is provided
             linked_instance = ExperimentInstance.query.get(instance_id)
-            if not linked_instance or linked_instance.user_id != current_user.id:
+            # Removed user-specific check for linked_instance
+            if not linked_instance:
                 return jsonify(error="Invalid or unauthorized experiment instance link."), 400
             node.linked_experiment_instance_id = linked_instance.id
         else: # If null or empty string is passed to clear the link
@@ -973,10 +919,10 @@ def update_scheme_node(scheme_id, node_id):
 
 
 @app.route("/schemes/<int:scheme_id>/nodes/<int:node_id>", methods=['DELETE'])
-@login_required
 def delete_scheme_node(scheme_id, node_id):
     scheme = ExperimentScheme.query.get_or_404(scheme_id)
-    if scheme.user_id != current_user.id: return jsonify(error="Unauthorized"), 403
+    # Removed permission check
+    # if scheme.user_id != current_user.id: return jsonify(error="Unauthorized"), 403
     
     node = SchemeNode.query.get_or_404(node_id)
     if node.scheme_id != scheme_id: return jsonify(error="Node not found in this scheme"), 404
@@ -987,10 +933,10 @@ def delete_scheme_node(scheme_id, node_id):
 
 
 @app.route("/schemes/<int:scheme_id>/edges", methods=['POST'])
-@login_required
 def add_scheme_edge(scheme_id):
     scheme = ExperimentScheme.query.get_or_404(scheme_id)
-    if scheme.user_id != current_user.id: return jsonify(error="Unauthorized"), 403
+    # Removed permission check
+    # if scheme.user_id != current_user.id: return jsonify(error="Unauthorized"), 403
 
     data = request.get_json()
     if not data or 'source_node_id' not in data or 'target_node_id' not in data:
@@ -1022,10 +968,10 @@ def add_scheme_edge(scheme_id):
 
 
 @app.route("/schemes/<int:scheme_id>/edges/<int:edge_id>", methods=['DELETE'])
-@login_required
 def delete_scheme_edge(scheme_id, edge_id):
     scheme = ExperimentScheme.query.get_or_404(scheme_id)
-    if scheme.user_id != current_user.id: return jsonify(error="Unauthorized"), 403
+    # Removed permission check
+    # if scheme.user_id != current_user.id: return jsonify(error="Unauthorized"), 403
 
     edge = SchemeEdge.query.get_or_404(edge_id)
     if edge.scheme_id != scheme_id: return jsonify(error="Edge not found in this scheme"), 404
@@ -1046,10 +992,9 @@ def set_cell_style(cell, bold=False, alignment=None, fill=None, border=None, fon
         cell.border = border
 
 @app.route("/experiments/<int:instance_id>/export/excel")
-@login_required
 def export_experiment_excel(instance_id):
     experiment = ExperimentInstance.query.get_or_404(instance_id)
-    # Optional: Add permission check if current_user can view/export this experiment
+    # Optional: Permission check removed
 
     wb = openpyxl.Workbook()
     
@@ -1070,7 +1015,7 @@ def export_experiment_excel(instance_id):
         ("Title:", experiment.title),
         ("Experiment Date:", experiment.experiment_date.strftime('%Y-%m-%d') if experiment.experiment_date else "N/A"),
         ("Status:", experiment.status),
-        ("Created By:", experiment.author.username),
+        ("Created By:", experiment.username), # Updated to instance.username
         ("Creation Date:", experiment.creation_date.strftime('%Y-%m-%d %H:%M:%S UTC')),
         ("Last Modified:", experiment.last_modified_date.strftime('%Y-%m-%d %H:%M:%S UTC')),
         ("Experiment Format:", experiment.experiment_format_ref.name),
@@ -1197,7 +1142,7 @@ def export_experiment_excel(instance_id):
 
     for log_entry in sorted(experiment.change_logs, key=lambda x: x.timestamp, reverse=True):
         ws_logs.cell(row=row_idx, column=1, value=log_entry.timestamp.strftime('%Y-%m-%d %H:%M:%S UTC')).border = thin_border
-        ws_logs.cell(row=row_idx, column=2, value=log_entry.user.username).border = thin_border
+        ws_logs.cell(row=row_idx, column=2, value=log_entry.username).border = thin_border # Updated to log_entry.username
         ws_logs.cell(row=row_idx, column=3, value=log_entry.field_name).border = thin_border
         ws_logs.cell(row=row_idx, column=4, value=log_entry.old_value).border = thin_border
         ws_logs.cell(row=row_idx, column=5, value=log_entry.new_value).border = thin_border
@@ -1231,10 +1176,9 @@ def export_experiment_excel(instance_id):
     )
 
 @app.route("/experiments/<int:instance_id>/export/pdf")
-@login_required
 def export_experiment_pdf(instance_id):
     experiment = ExperimentInstance.query.get_or_404(instance_id)
-    # Optional: Permission check
+    # Optional: Permission check removed
 
     # Render the HTML template with experiment data
     html_out = render_template('exports/export_experiment.html', experiment=experiment)
@@ -1259,14 +1203,14 @@ def export_experiment_pdf(instance_id):
 
 
 @app.route("/experiments/<int:instance_id>/layout_links/<int:link_id>/unlink", methods=['POST'])
-@login_required
 def unlink_plate_from_experiment(instance_id, link_id):
     plate_link = ExperimentPlateLink.query.get_or_404(link_id)
     experiment = plate_link.experiment_instance
 
-    if experiment.author != current_user: # Basic permission check
-        flash('You are not authorized to modify this experiment.', 'danger')
-        return redirect(url_for('view_experiment_instance', instance_id=instance_id))
+    # Removed permission check:
+    # if experiment.author != current_user:
+    #     flash('You are not authorized to modify this experiment.', 'danger')
+    #     return redirect(url_for('view_experiment_instance', instance_id=instance_id))
 
     if plate_link.experiment_instance_id != instance_id: # Ensure link belongs to the experiment in URL
         flash('Invalid operation: Plate link does not belong to this experiment.', 'danger')
@@ -1276,7 +1220,7 @@ def unlink_plate_from_experiment(instance_id, link_id):
     name_in_exp = plate_link.name_in_experiment
     
     db.session.delete(plate_link)
-    log_experiment_change(instance_id, current_user.id, "Experiment Plate Layout", f"Unlinked: {name_in_exp} (Layout: {layout_name})", None)
+    log_experiment_change(instance_id, experiment.username, "Experiment Plate Layout", f"Unlinked: {name_in_exp} (Layout: {layout_name})", None) # Updated username
     experiment.last_modified_date = datetime.utcnow()
     db.session.commit()
 

@@ -4,9 +4,8 @@
         <div class="d-flex justify-content-between align-items-center mb-3">
             <h2>{{ instance.title }}</h2>
             <div class="btn-group" role="group" aria-label="Experiment Actions">
-                {% if instance.author == current_user or current_user.is_admin %} {# Basic permission #}
-                    <a href="{{ url_for('edit_experiment_instance', instance_id=instance.id) }}" class="btn btn-outline-secondary btn-sm">Edit Details</a>
-                {% endif %}
+                {# Permissions removed, actions are now unconditionally available #}
+                <a href="{{ url_for('edit_experiment_instance', instance_id=instance.id) }}" class="btn btn-outline-secondary btn-sm">Edit Details</a>
                 <div class="btn-group" role="group">
                     <button id="btnGroupDrop1" type="button" class="btn btn-outline-info btn-sm dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
                         Export
@@ -16,12 +15,10 @@
                         <a class="dropdown-item" href="{{ url_for('export_experiment_pdf', instance_id=instance.id) }}">To PDF</a>
                     </div>
                 </div>
-                 {% if instance.author == current_user or current_user.is_admin %}
-                    <form action="{{ url_for('delete_experiment_instance', instance_id=instance.id) }}" method="POST" style="display:inline;">
-                        {# Ensure this form is part of the btn-group or styled appropriately if separate #}
-                        <button type="submit" class="btn btn-outline-danger btn-sm ml-1" onclick="return confirm('Are you sure you want to delete this experiment and all its data?');">Delete</button>
-                    </form>
-                {% endif %}
+                <form action="{{ url_for('delete_experiment_instance', instance_id=instance.id) }}" method="POST" style="display:inline;">
+                    {# Ensure this form is part of the btn-group or styled appropriately if separate #}
+                    <button type="submit" class="btn btn-outline-danger btn-sm ml-1" onclick="return confirm('Are you sure you want to delete this experiment and all its data?');">Delete</button>
+                </form>
             </div>
         </div>
 
@@ -32,7 +29,7 @@
                 <p><strong>Format:</strong> {{ instance.experiment_format_ref.name }}</p>
                 <p><strong>Status:</strong> <span class="badge badge-primary">{{ instance.status }}</span></p>
                 <p><strong>Experiment Date:</strong> {{ instance.experiment_date.strftime('%Y-%m-%d') }}</p>
-                <p><strong>Created By:</strong> {{ instance.author.username }}</p>
+                <p><strong>Created By:</strong> {{ instance.username }}</p> {# Changed from instance.author.username #}
                 <p><strong>Creation Date:</strong> {{ instance.creation_date.strftime('%Y-%m-%d %H:%M:%S UTC') }}</p>
                 <p><strong>Last Modified:</strong> {{ instance.last_modified_date.strftime('%Y-%m-%d %H:%M:%S UTC') }}</p>
             </div>
@@ -71,9 +68,8 @@
         <div class="card mb-4">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <span>Linked Plate Layouts & Well Data</span>
-                {% if instance.author == current_user or current_user.is_admin %}
+                {# Permissions removed, action is now unconditionally available #}
                 <a href="{{ url_for('link_plate_to_experiment', instance_id=instance.id) }}" class="btn btn-sm btn-outline-primary">Link New Layout</a>
-                {% endif %}
             </div>
             {% if instance.plate_links %}
                 {% for plate_link in instance.plate_links | sort(attribute='name_in_experiment') %}
@@ -81,14 +77,13 @@
                     <h5 class="card-title">{{ plate_link.name_in_experiment }}</h5>
                     <h6 class="card-subtitle mb-2 text-muted">Layout: {{ plate_link.plate_layout.name }} ({{ plate_link.plate_layout.layout_type.replace('_', ' ') | title }})</h6>
                     
-                    {% if instance.author == current_user or current_user.is_admin %}
+                    {# Permissions removed, actions are now unconditionally available #}
                     <div class="mb-2">
                         <a href="{{ url_for('edit_well_data', instance_id=instance.id, link_id=plate_link.id) }}" class="btn btn-sm btn-info">Enter/Edit Well Data</a>
                         <form action="{{ url_for('unlink_plate_from_experiment', instance_id=instance.id, link_id=plate_link.id) }}" method="POST" style="display:inline;" onsubmit="return confirm('Are you sure you want to unlink this plate layout and delete all its well data for this experiment?');">
                             <input type="submit" value="Unlink Layout" class="btn btn-sm btn-warning">
                         </form>
                     </div>
-                    {% endif %}
                     
                     {% if plate_link.well_data %}
                         <p><strong>Well Data Highlights:</strong></p> {# Or full table if simple enough #}
@@ -183,7 +178,7 @@
                 <ul class="list-group list-group-flush" style="max-height: 400px; overflow-y: auto;">
                     {% for log in change_logs %}
                         <li class="list-group-item">
-                            <small class="text-muted">{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S UTC') }} by {{ log.user.username }}</small><br>
+                            <small class="text-muted">{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S UTC') }} by {{ log.username }}</small><br> {# Changed from log.user.username #}
                             Field <strong>{{ log.field_name }}</strong> changed.
                             {% if log.old_value is not none and log.new_value is not none %}
                                  From: <span class="badge badge-light">{{ log.old_value[:100] }}{% if log.old_value|length > 100 %}...{% endif %}</span>

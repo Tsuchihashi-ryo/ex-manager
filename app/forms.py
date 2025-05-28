@@ -1,40 +1,13 @@
 from flask_wtf import FlaskForm
+from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, SubmitField, BooleanField, TextAreaField, SelectField, FieldList, FormField, DateField, FileField, IntegerField, HiddenField
-from wtforms.validators import DataRequired, Length, Email, EqualTo, ValidationError, Optional, NumberRange
+from wtforms.validators import DataRequired, Length, ValidationError, Optional, NumberRange # Removed Email, EqualTo
 from wtforms.widgets import DateInput # For DateField
 from flask_wtf.file import FileAllowed # For FileField
-from app.models import User, ExperimentFormat, FormatPattern, PlateLayout # Import PlateLayout for QuerySelectField
+from app.models import ExperimentFormat, FormatPattern, PlateLayout # Import PlateLayout for QuerySelectField, Removed User
 
 # QuerySelectField needs a query_factory
 from wtforms_sqlalchemy.fields import QuerySelectField
-
-
-class RegistrationForm(FlaskForm):
-    username = StringField('Username',
-                           validators=[DataRequired(), Length(min=2, max=20)])
-    email = StringField('Email',
-                        validators=[DataRequired(), Email()])
-    password = PasswordField('Password', validators=[DataRequired()])
-    confirm_password = PasswordField('Confirm Password',
-                                     validators=[DataRequired(), EqualTo('password')])
-    submit = SubmitField('Sign Up')
-
-    def validate_username(self, username):
-        user = User.query.filter_by(username=username.data).first()
-        if user:
-            raise ValidationError('That username is taken. Please choose a different one.')
-
-    def validate_email(self, email):
-        user = User.query.filter_by(email=email.data).first()
-        if user:
-            raise ValidationError('That email is taken. Please choose a different one.')
-
-class LoginForm(FlaskForm):
-    email = StringField('Email',
-                        validators=[DataRequired(), Email()])
-    password = PasswordField('Password', validators=[DataRequired()])
-    remember = BooleanField('Remember Me')
-    submit = SubmitField('Login')
 
 # Forms for Experiment Format Management (Existing - no changes here)
 
@@ -73,6 +46,7 @@ class CreateExperimentInstanceForm(FlaskForm):
                                          get_label='name', 
                                          allow_blank=False,
                                          validators=[DataRequired()])
+    username = StringField('Username', validators=[DataRequired(), Length(max=100)]) # Added field
     status = SelectField('Status', choices=[
         ('DRAFT', 'Draft'), ('IN_PROGRESS', 'In Progress'), ('COMPLETED', 'Completed'),
         ('REVIEW', 'Under Review'), ('ANALYSIS', 'Data Analysis'), ('ARCHIVED', 'Archived')
@@ -123,6 +97,7 @@ class WellPropertyDefinitionForm(FlaskForm): # Used as FieldList(FormField(...))
 class PlateLayoutForm(FlaskForm):
     name = StringField('Layout Name', validators=[DataRequired(), Length(max=100)])
     description = TextAreaField('Description', validators=[Optional()])
+    creator_username = StringField('Creator Username', validators=[DataRequired(), Length(max=100)]) # Added field
     layout_type = SelectField('Layout Type', choices=[
         ('PLATE_96', '96-well Plate (8x12)'),
         ('PLATE_384', '384-well Plate (16x24)'),
@@ -250,6 +225,7 @@ def generate_well_data_form(experiment_plate_link, data=None, existing_well_data
 class ExperimentSchemeForm(FlaskForm):
     name = StringField('Scheme Name', validators=[DataRequired(), Length(max=150)])
     description = TextAreaField('Description', validators=[Optional()])
+    creator_username = StringField('Creator Username', validators=[DataRequired(), Length(max=100)]) # Added field
     submit = SubmitField('Save Scheme')
 
 def get_experiment_instances(): # Factory for QuerySelectField
