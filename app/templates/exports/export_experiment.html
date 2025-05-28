@@ -4,7 +4,13 @@
     <meta charset="UTF-8">
     <title>Experiment Export: {{ experiment.title }}</title>
     <style>
-        body { font-family: sans-serif; margin: 20px; color: #333; }
+        @font-face {
+            font-family: "IPAexGothic";
+            src: local("IPAexGothic"), local("ipaexg"); /* システムにインストールされているフォント名で試す */
+            /* xhtml2pdfでは TTFファイルへのパス指定がより確実な場合があります:
+               src: url("file:///path/to/ipaexg.ttf"); */
+        }
+        body { font-family: "IPAexGothic", sans-serif; margin: 20px; color: #333; }
         h1, h2, h3 { color: #222; border-bottom: 1px solid #ccc; padding-bottom: 5px; }
         h1 { font-size: 24px; }
         h2 { font-size: 20px; margin-top: 30px; }

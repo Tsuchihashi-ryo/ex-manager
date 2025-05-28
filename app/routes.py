@@ -8,8 +8,7 @@ from io import BytesIO # For sending files
 import openpyxl
 from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
 from openpyxl.utils import get_column_letter
-from weasyprint import HTML, CSS # For PDF export
-from weasyprint.fonts import FontConfiguration # Optional for font config
+from xhtml2pdf import pisa  # For PDF export
 from app import app, db, bcrypt
 from app.forms import (
     RegistrationForm, LoginForm, 
@@ -1240,11 +1239,12 @@ def export_experiment_pdf(instance_id):
     # Render the HTML template with experiment data
     html_out = render_template('exports/export_experiment.html', experiment=experiment)
     
-    # Use WeasyPrint to convert HTML to PDF
+    # Use xhtml2pdf to convert HTML to PDF
     pdf_stream = BytesIO()
-    # font_config = FontConfiguration() # Basic, can be customized
-    # HTML(string=html_out).write_pdf(pdf_stream, font_config=font_config)
-    HTML(string=html_out).write_pdf(pdf_stream) # Default font config
+    pdf = pisa.CreatePDF(html_out, dest=pdf_stream)
+    if pdf.err:
+        current_app.logger.error(f"PDF generation error: {pdf.err}")
+        raise Exception(f"PDF generation error: {pdf.err}")
     pdf_stream.seek(0)
 
     safe_title = secure_filename(experiment.title)
