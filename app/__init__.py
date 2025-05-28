@@ -1,6 +1,7 @@
 import os
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
+from flask_migrate import Migrate
 from flask_bcrypt import Bcrypt
 from flask_login import LoginManager
 
@@ -12,6 +13,7 @@ if not os.path.exists(app.config['UPLOAD_FOLDER']):
     os.makedirs(app.config['UPLOAD_FOLDER'])
 
 db = SQLAlchemy(app)
+migrate = Migrate(app, db)
 bcrypt = Bcrypt(app)
 login_manager = LoginManager(app)
 login_manager.login_view = 'login' # route function name for login
@@ -37,5 +39,5 @@ from app import routes
 def load_user(user_id):
     return models.User.query.get(int(user_id))
 
-with app.app_context():
-    db.create_all() # This needs models to be imported
+# with app.app_context():
+    # db.create_all() # This needs models to be imported - TEMPORARILY COMMENTED OUT FOR MIGRATION
