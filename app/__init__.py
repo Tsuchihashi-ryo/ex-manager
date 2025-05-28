@@ -22,13 +22,17 @@ db = SQLAlchemy(app)
 # The following is to create the database tables
 # It should be run once, perhaps from a separate script or Flask shell
 # For now, we can include it here for simplicity during initial setup.
-from app import models # This import is for the user_loader and db.create_all()
-# Import routes after db and models to avoid circularity if routes import db/models
+
+# Import models FIRST
+from app import models 
+
+# Create tables AFTER models are defined and imported
+with app.app_context():
+    db.create_all()
+
+# Import routes LAST (after db.create_all() and models import)
 from app import routes 
 
 # @login_manager.user_loader # Removed
 # def load_user(user_id): # Removed
 #     return models.User.query.get(int(user_id)) # Removed
-
-with app.app_context():
-    db.create_all() # This needs models to be imported

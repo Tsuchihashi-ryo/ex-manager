@@ -9,7 +9,7 @@ import openpyxl
 from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
 from openpyxl.utils import get_column_letter
 from xhtml2pdf import pisa  # For PDF export
-from app import app, db, bcrypt
+from app import app, db # Removed bcrypt
 from app.forms import (
     ExperimentFormatForm, FieldDefinitionForm, FormatPatternForm,
     CreateExperimentInstanceForm, generate_dynamic_data_form,
